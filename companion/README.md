@@ -1,19 +1,20 @@
 # 🦜 A Living Desktop Companion
 
 A bright, chaotic-goofy cartoon face that fills the screen, blinks, breathes, and
-reacts. Built for the Lenovo Legion Go, but it runs in any modern browser.
+reacts — and now **talks back out loud**. Built for the Lenovo Legion Go, but it
+runs in any modern browser.
 
-This repo is built **phase by phase** (see `TAMAGOTCHI_BUILD_PLAN.md` for the full
-plan). One creature, three layers: **Body** (the face), **Mind** (brain + memory +
-mood), **Life** (the Tamagotchi game + senses). A single **emotion signal** is the
-spine that drives the face, the voice, and the animation springiness together.
+Built phase by phase (see `TAMAGOTCHI_BUILD_PLAN.md`). One creature, three layers:
+**Body** (the face), **Mind** (brain + memory + mood), **Life** (the Tamagotchi game
++ senses). A single **emotion signal** is the spine that drives the face, the voice,
+and the animation springiness together.
 
 ---
 
 ## Status
 
-- ✅ **Phase 0 — Scaffold + the alive face** *(current)*
-- ⬜ Phase 1 — Brain + Voice OUT + Emotion
+- ✅ **Phase 0 — Scaffold + the alive face**
+- ✅ **Phase 1 — Brain + Voice OUT + Emotion** *(current)*
 - ⬜ Phase 2 — Ears (Voice IN)
 - ⬜ Phase 3 — Channels (text it from anywhere)
 - ⬜ Phase 4 — Senses (the nervous system)
@@ -23,80 +24,100 @@ spine that drives the face, the voice, and the animation springiness together.
 
 ---
 
-## Run it (Phase 0)
+## Run it (Phase 1)
 
+You need two local things running alongside the app: **Ollama** (the brain) and the
+**Kokoro** voice files (the voice). Both are free and fully offline.
+
+### 1. Brain — Ollama
+```bash
+# install Ollama from https://ollama.com, then pull a small chat model:
+ollama pull llama3.2:3b        # or qwen2.5:3b, etc. (3B-class leaves room for the voice)
+```
+Set `OLLAMA_MODEL` in `.env` to whatever you pulled.
+
+### 2. Voice — Kokoro model files (one-time, ~330MB)
+Download into the `companion/` directory (next to this README):
+```bash
+curl -L -o kokoro-v1.0.onnx  https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx
+curl -L -o voices-v1.0.bin   https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin
+```
+(If they're missing, the creature still shows the face + reply text — just silently.)
+
+### 3. The app
 ```bash
 cd companion
-pip install -r requirements.txt          # or: pip install --break-system-packages -r requirements.txt
+cp .env.example .env            # then set OLLAMA_MODEL
+pip install -r requirements.txt
 python -m backend.main
 ```
+Open the **face** at <http://127.0.0.1:8000> (or `USE_WEBVIEW=true` for the fullscreen
+window / `msedge --kiosk --app=http://127.0.0.1:8000` on the Go).
 
-Then open <http://127.0.0.1:8000> in a browser.
+> **Sound note:** browsers block audio until you interact with the page. Click the
+> face once (a poke) to unlock sound for the session. For Edge kiosk you can also add
+> `--autoplay-policy=no-user-gesture-required`.
 
-On the Legion Go you have two fullscreen options:
+### 4. Talk to it
+- On the same machine: open <http://127.0.0.1:8000/control> in another tab.
+- **From your phone** (same wi-fi): set `HOST=0.0.0.0`, find this PC's LAN IP, and open
+  `http://<that-ip>:8000/control`. Type → the creature thinks, then **replies out loud
+  on the Go**, mouth synced, face matching the mood.
 
-- **pywebview window** (chrome-less, on-device feel): `pip install pywebview`, set
-  `USE_WEBVIEW=true` in `.env`, then `python -m backend.main`.
-- **Edge kiosk**: `msedge --kiosk --app=http://127.0.0.1:8000` while the server runs.
-
-Copy `.env.example` to `.env` to set the creature's name, port, etc. Nothing in
-there is required for Phase 0.
-
-## Play with the face
-
-It's alive on its own — it blinks, its eyes wander, it breathes, its brows twitch.
-A debug panel (top-left) lets you drive it:
-
-| Action | How |
-|---|---|
-| Pick an emotion | Click a button, or keys `1–9 0 - =` |
-| Next emotion | `Space` |
-| Back to neutral | `Backspace` |
-| Auto-cycle all poses | `a` (or the button) |
-| Poke it | `p`, or click/tap the face |
-| Toggle idle life | `i` |
-| Fullscreen | `f` |
-| Show/hide the panel | `` ` `` |
-
-The 12 emotions — `neutral, happy, excited, mischievous, curious, thinking,
-surprised, sad, sleepy, grumpy, love, dizzy` — are the fixed set the rest of the
-project speaks in. Each one is a face pose **and** (later) a voice delivery **and**
-an animation springiness profile.
-
-You can also drive it from outside the browser — this is the same nerve the brain
-and the senses will use in later phases:
-
+You can also drive it from a terminal:
 ```bash
-curl -X POST http://127.0.0.1:8000/api/emotion/excited
+curl -X POST localhost:8000/api/say -H 'content-type: application/json' -d '{"text":"hey, what song is this?"}'
 ```
+
+## Play with the face (Phase 0 controls)
+
+Still alive on its own (blinks, eye wander, breathing). A debug panel (top-left) drives
+poses by hand: keys `1–9 0 - =`, `Space` = next, `p`/click = poke, `i` = idle toggle,
+`f` = fullscreen, `` ` `` = panel.
+
+The 12 emotions — `neutral, happy, excited, mischievous, curious, thinking, surprised,
+sad, sleepy, grumpy, love, dizzy` — are the fixed set the whole project speaks in.
+
+## How a reply flows (Phase 1)
+
+```
+you type ──▶ POST /api/say ──▶ switchboard
+                                  │  1. broadcast {emotion: "thinking"}      → face shows thinking
+                                  │  2. brain.respond(text)  → Ollama        → {emotion, text}
+                                  │  3. voice.speak(text, emotion) → Kokoro  → WAV bytes
+                                  └─ 4. broadcast {type:"say", emotion, text, audio}
+                                                                             ▼
+                                          face: set pose · play WAV (Web Audio) ·
+                                          mouth-openness = live audio amplitude (RMS)
+```
+
+- **Structured emotion:** the brain is asked for `{"emotion","text"}` via a JSON schema,
+  and `brain.parse_reply` is paranoid — strips `<think>`/code fences, digs the JSON out
+  of noise, validates the emotion, and never crashes (worst case: speaks the prose).
+- **Voice is swappable:** everything routes through `voice.speak(text, emotion)`. Kokoro
+  is the first engine; Orpheus / ElevenLabs (Phase 6) drop in behind the same call.
+- **Lip-sync** is amplitude-only (loud = open), measured from the exact buffer that
+  plays, so it stays in sync. No phoneme mapping.
 
 ## Layout
 
 ```
 companion/
 ├── backend/
-│   ├── main.py        # FastAPI switchboard + WebSocket hub  (the spine)
+│   ├── main.py        # switchboard + WebSocket hub + /api/say orchestration
 │   ├── config.py      # settings, .env, the canonical emotion set
-│   ├── brain.py       # Ollama          (stub — Phase 1)
-│   ├── voice/         # speak() + TTS   (stub — Phase 1)
+│   ├── brain.py       # Ollama call, parrot personality, robust JSON parsing
+│   ├── voice/
+│   │   ├── __init__.py        # speak(text, emotion) dispatcher + WAV helper
+│   │   ├── kokoro_engine.py   # Kokoro TTS (Phase 1)
+│   │   ├── orpheus_engine.py  # stub (Phase 6)
+│   │   └── elevenlabs_engine.py # stub (Phase 6)
 │   ├── senses/        # the event bus   (stub — Phase 4)
 │   └── channels/      # telegram + web  (stub — Phase 3)
 ├── frontend/
-│   ├── face.html      # inline SVG face + debug panel
-│   ├── face.css
-│   └── face.js        # spring engine, idle life, 12 poses, WS client
+│   ├── face.html / face.css / face.js   # the creature + lip-sync playback
+│   └── control.html                     # the phone/desktop text box
 ├── data/              # memory.json / state.json land here (Phase 5+)
 ├── requirements.txt
 └── .env.example
 ```
-
-### How the face works (the one idea)
-
-Every moving part is a **spring** with a target value. An **emotion** is just a
-table of targets plus a *springiness profile* (stiffness + damping). Switching
-emotion retargets the springs and they **jiggle to a stop** — that overshoot is
-the whole goofy-gremlin vibe. On top of that runs an always-on **idle loop**
-(blinks, eye saccades, breathing, brow twitches) so it's never perfectly still.
-
-Adding the brain later = pushing `{"type":"emotion","emotion":"..."}` down the
-WebSocket. Nothing in the face has to change.

@@ -51,8 +51,8 @@ def _get(key: str, default: str) -> str:
 # Identity
 # ---------------------------------------------------------------------------
 # The creature's name. It will become the wake word in Phase 2, so it matters —
-# but Phase 0 just shows it in the window title and debug panel. Rename freely.
-CREATURE_NAME = _get("CREATURE_NAME", "Pip")
+# shown in the window title/debug panel and used in the brain's personality.
+CREATURE_NAME = _get("CREATURE_NAME", "Chatty")
 
 # ---------------------------------------------------------------------------
 # Server
@@ -71,13 +71,42 @@ DESIGN_WIDTH = int(_get("DESIGN_WIDTH", "2560"))
 DESIGN_HEIGHT = int(_get("DESIGN_HEIGHT", "1600"))
 
 # ---------------------------------------------------------------------------
-# Future-phase settings (declared early, unused in Phase 0)
+# Brain (Ollama) — Phase 1
 # ---------------------------------------------------------------------------
 OLLAMA_HOST = _get("OLLAMA_HOST", "http://localhost:11434")
-OLLAMA_MODEL = _get("OLLAMA_MODEL", "")
+# The chat model. Set this to one you've pulled, e.g. "llama3.2:3b", "qwen2.5:3b".
+OLLAMA_MODEL = _get("OLLAMA_MODEL", "llama3.2:3b")
+# Keep replies short & quippy; cap generation so it can't ramble into an essay.
+OLLAMA_NUM_PREDICT = int(_get("OLLAMA_NUM_PREDICT", "200"))
+OLLAMA_TEMPERATURE = float(_get("OLLAMA_TEMPERATURE", "0.8"))
+# How long Ollama keeps the model resident between turns (snappier replies).
+OLLAMA_KEEP_ALIVE = _get("OLLAMA_KEEP_ALIVE", "10m")
+# How many recent turns of conversation to feed back as context (RAM only;
+# real persisted memory is Phase 7).
+HISTORY_TURNS = int(_get("HISTORY_TURNS", "8"))
+
+# ---------------------------------------------------------------------------
+# Voice OUT — Phase 1 (Kokoro). Orpheus/ElevenLabs are Phase 6.
+# ---------------------------------------------------------------------------
 VOICE_ENGINE = _get("VOICE_ENGINE", "kokoro")
+# Kokoro model files (download once — see README). Paths are resolved relative
+# to the project dir if not absolute.
+KOKORO_MODEL = _get("KOKORO_MODEL", "kokoro-v1.0.onnx")
+KOKORO_VOICES = _get("KOKORO_VOICES", "voices-v1.0.bin")
+KOKORO_VOICE = _get("KOKORO_VOICE", "af_heart")
+KOKORO_LANG = _get("KOKORO_LANG", "en-us")
 ELEVENLABS_API_KEY = _get("ELEVENLABS_API_KEY", "")
+
+# ---------------------------------------------------------------------------
+# Channels — Phase 3 (declared early, unused until then)
+# ---------------------------------------------------------------------------
 TELEGRAM_TOKEN = _get("TELEGRAM_TOKEN", "")
+
+
+def resolve_path(p: str) -> Path:
+    """Absolute paths pass through; relative ones resolve against the project dir."""
+    path = Path(p)
+    return path if path.is_absolute() else (PROJECT_DIR / path)
 
 # The canonical emotion set the face knows how to render. The brain (Phase 1)
 # must only ever emit one of these. Single source of truth, shared with the

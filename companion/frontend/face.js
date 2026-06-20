@@ -352,11 +352,13 @@
     el.spiralL.setAttribute("transform", `rotate(${spin})`);
     el.spiralR.setAttribute("transform", `rotate(${spin})`);
 
-    // ---- mouth
-    const d = mouthPath(S.mW.value, S.mOpen.value, S.mCurve.value, S.mAsym.value);
+    // ---- mouth: pose openness + live lip-sync amplitude (loud = open)
+    updateLip();
+    const mo = S.mOpen.value + lip.amp * LIP_GAIN;
+    const mc = S.mCurve.value;
+    const d = mouthPath(S.mW.value, mo, mc, S.mAsym.value);
     el.mouth.setAttribute("d", d);
     el.mouthClip.setAttribute("d", d);
-    const mo = S.mOpen.value, mc = S.mCurve.value;
     el.teeth.setAttribute("opacity", (clamp01((mo - 30) / 50) * clamp01((mc + 10) / 30)).toFixed(3));
     el.tongue.setAttribute("opacity", clamp01((mo - 40) / 50).toFixed(3));
 
@@ -407,6 +409,60 @@
     const a = clamp01(amt);
     group.setAttribute("opacity", a.toFixed(3));
     if (a > 0.02) animate();
+  }
+
+  // ---------------------------------------------------------------------------
+  //  Voice OUT + lip-sync. The backend sends a "say" message with WAV audio;
+  //  we play it through Web Audio and drive mouth-openness from the live
+  //  amplitude (RMS). No phonemes — loud = open. Sample-accurate by construction
+  //  (the same buffer that plays is the one we measure).
+  // ---------------------------------------------------------------------------
+  const LIP_GAIN = 170;                 // how far the mouth opens at full volume
+  const lip = { ctx: null, analyser: null, data: null, src: null, speaking: false, amp: 0 };
+
+  function ensureAudio() {
+    if (lip.ctx) return lip.ctx;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;               // jsdom / no Web Audio: stay silent, face still works
+    lip.ctx = new AC();
+    lip.analyser = lip.ctx.createAnalyser();
+    lip.analyser.fftSize = 1024;
+    lip.analyser.smoothingTimeConstant = 0;
+    lip.data = new Float32Array(lip.analyser.fftSize);
+    lip.analyser.connect(lip.ctx.destination);
+    return lip.ctx;
+  }
+  function resumeAudio() { if (lip.ctx && lip.ctx.state === "suspended") lip.ctx.resume().catch(() => {}); }
+
+  function b64ToBuf(b64) {
+    const bin = atob(b64), n = bin.length, bytes = new Uint8Array(n);
+    for (let i = 0; i < n; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes.buffer;
+  }
+  async function playAudio(b64) {
+    const ctx = ensureAudio();
+    if (!ctx) return;
+    if (ctx.state === "suspended") { try { await ctx.resume(); } catch { /* needs a gesture */ } }
+    let buf;
+    try { buf = await ctx.decodeAudioData(b64ToBuf(b64)); } catch { return; }
+    if (lip.src) { try { lip.src.stop(); } catch { /* already stopped */ } }
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.connect(lip.analyser);
+    src.onended = () => { if (lip.src === src) { lip.speaking = false; lip.src = null; } };
+    lip.src = src; lip.speaking = true;
+    src.start();
+  }
+  function updateLip() {
+    let target = 0;
+    if (lip.speaking && lip.analyser) {
+      lip.analyser.getFloatTimeDomainData(lip.data);
+      let sum = 0;
+      for (let i = 0; i < lip.data.length; i++) sum += lip.data[i] * lip.data[i];
+      target = clamp01(Math.sqrt(sum / lip.data.length) * 3.4);
+    }
+    // snappier to open than to close, so flaps read crisp
+    lip.amp += (target - lip.amp) * (target > lip.amp ? 0.6 : 0.2);
   }
 
   // ---------------------------------------------------------------------------
@@ -508,6 +564,10 @@
     lookBiasX = nx * 70; lookBiasY = ny * 50; lookBiasUntil = performance.now() / 1000 + 1.4;
   });
   svg.addEventListener("pointerdown", poke);
+  // browsers gate audio until a user gesture; unlock it on the first interaction
+  const unlock = () => { ensureAudio(); resumeAudio(); };
+  window.addEventListener("pointerdown", unlock, { once: true });
+  window.addEventListener("keydown", unlock, { once: true });
 
   // ---------------------------------------------------------------------------
   //  WebSocket — the nerve the brain/senses will push emotions down later.
@@ -522,7 +582,11 @@
     ws.onmessage = (ev) => {
       let m; try { m = JSON.parse(ev.data); } catch { return; }
       if (m.type === "emotion" && POSES[m.emotion]) applyPose(m.emotion);
-      if (m.type === "hello" && m.name) setName(m.name);
+      else if (m.type === "say") {
+        if (POSES[m.emotion]) applyPose(m.emotion);   // set the mood
+        if (m.audio) playAudio(m.audio);              // speak + lip-sync
+      }
+      else if (m.type === "hello" && m.name) setName(m.name);
     };
   }
   function setDot(ok) { const d = $("dot"); if (d) d.classList.toggle("off", !ok); }
