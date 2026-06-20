@@ -1,0 +1,20 @@
+# --- Phase 0 (scaffold + the alive face) ---
+fastapi>=0.110
+uvicorn[standard]>=0.29
+# Optional: chrome-less fullscreen desktop window on the Legion Go.
+# Not needed for headless/browser dev. Enable with USE_WEBVIEW=true.
+# pywebview>=5.0
+
+# --- Later phases (kept here as a roadmap; install when you reach them) ---
+# Phase 1 brain + voice:
+#   httpx                # talk to Ollama
+#   kokoro-onnx          # default TTS
+#   sounddevice numpy    # audio amplitude -> mouth flap
+# Phase 2 ears:
+#   faster-whisper
+# Phase 3 channels:
+#   python-telegram-bot
+# Phase 4 senses (Windows):
+#   winsdk               # SMTC now-playing
+# Phase 6 cloud voice:
+#   elevenlabs

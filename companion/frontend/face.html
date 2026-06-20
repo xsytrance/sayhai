@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>companion</title>
+  <link rel="stylesheet" href="/face.css" />
+</head>
+<body>
+  <!-- The stage. The SVG face fills it; the debug panel floats on top. -->
+  <div id="stage">
+    <!--
+      viewBox is a 1000x1000 square; the whole creature is drawn in absolute
+      coordinates around the center (500, 540). face.js composes one transform
+      on #face for head tilt / squash-stretch / breathing, and per-part
+      transforms for eyes, brows, mouth and the floating bits.
+    -->
+    <svg id="svg" viewBox="0 0 1000 1000" preserveAspectRatio="xMidYMid meet"
+         xmlns="http://www.w3.org/2000/svg" aria-label="companion face">
+      <defs>
+        <radialGradient id="bodyGrad" cx="42%" cy="34%" r="78%">
+          <stop offset="0%"  stop-color="#56e0c8" />
+          <stop offset="55%" stop-color="#22c3a6" />
+          <stop offset="100%" stop-color="#0f9e8c" />
+        </radialGradient>
+        <radialGradient id="patchGrad" cx="50%" cy="42%" r="65%">
+          <stop offset="0%"  stop-color="#fff7e8" />
+          <stop offset="100%" stop-color="#ffe7c2" />
+        </radialGradient>
+        <linearGradient id="tuftGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%"  stop-color="#ffd24a" />
+          <stop offset="100%" stop-color="#ff9d2e" />
+        </linearGradient>
+        <radialGradient id="cheekGrad" cx="50%" cy="50%" r="50%">
+          <stop offset="0%"  stop-color="#ff8aa6" />
+          <stop offset="100%" stop-color="#ff8aa6" stop-opacity="0" />
+        </radialGradient>
+        <clipPath id="clipL"><circle cx="360" cy="470" r="155" /></clipPath>
+        <clipPath id="clipR"><circle cx="640" cy="470" r="155" /></clipPath>
+        <clipPath id="mouthClip"><path id="mouthClipPath" d="" /></clipPath>
+      </defs>
+
+      <!-- everything that should tilt / squash / breathe together -->
+      <g id="face">
+
+        <!-- floating tufts (parrot energy), sway with head motion -->
+        <g id="tufts">
+          <path class="tuft" d="M470 235 C 452 150, 470 96, 500 70 C 512 130, 506 196, 500 235 Z" />
+          <path class="tuft" d="M500 235 C 500 120, 520 70, 556 44 C 560 120, 540 196, 530 235 Z" />
+          <path class="tuft" d="M430 238 C 420 168, 430 120, 452 92 C 470 150, 462 200, 460 238 Z" />
+        </g>
+
+        <!-- head / body -->
+        <ellipse id="body" cx="500" cy="545" rx="425" ry="460" fill="url(#bodyGrad)" />
+        <ellipse id="patch" cx="500" cy="585" rx="318" ry="330" fill="url(#patchGrad)" />
+
+        <!-- cheeks (blush) -->
+        <ellipse id="cheekL" class="cheek" cx="298" cy="650" rx="86" ry="62" fill="url(#cheekGrad)" />
+        <ellipse id="cheekR" class="cheek" cx="702" cy="650" rx="86" ry="62" fill="url(#cheekGrad)" />
+
+        <!-- eyebrows (floating, Rayman-style) -->
+        <g id="browL" class="brow"><rect x="-104" y="-24" width="208" height="48" rx="24" /></g>
+        <g id="browR" class="brow"><rect x="-104" y="-24" width="208" height="48" rx="24" /></g>
+
+        <!-- LEFT EYE -->
+        <g class="eye">
+          <g clip-path="url(#clipL)">
+            <circle cx="360" cy="470" r="155" fill="#ffffff" />
+            <g id="gazeL">
+              <circle id="pupilL" cx="0" cy="0" r="66" fill="#23204a" />
+              <circle class="glint" cx="-22" cy="-26" r="22" fill="#ffffff" />
+              <circle class="glint2" cx="18" cy="14" r="10" fill="#ffffff" opacity="0.7" />
+              <path id="heartL" class="heart-pupil" d="" fill="#ff5b86" opacity="0" />
+              <path id="spiralL" class="spiral" d="" fill="none" stroke="#23204a" stroke-width="12" opacity="0" />
+            </g>
+            <rect id="lidUpL" class="lid" x="130" y="-20" width="460" height="340" />
+            <rect id="lidLoL" class="lid" x="130" y="620" width="460" height="300" />
+          </g>
+          <circle class="rim" cx="360" cy="470" r="155" fill="none" />
+        </g>
+
+        <!-- RIGHT EYE -->
+        <g class="eye">
+          <g clip-path="url(#clipR)">
+            <circle cx="640" cy="470" r="155" fill="#ffffff" />
+            <g id="gazeR">
+              <circle id="pupilR" cx="0" cy="0" r="66" fill="#23204a" />
+              <circle class="glint" cx="-22" cy="-26" r="22" fill="#ffffff" />
+              <circle class="glint2" cx="18" cy="14" r="10" fill="#ffffff" opacity="0.7" />
+              <path id="heartR" class="heart-pupil" d="" fill="#ff5b86" opacity="0" />
+              <path id="spiralR" class="spiral" d="" fill="none" stroke="#23204a" stroke-width="12" opacity="0" />
+            </g>
+            <rect id="lidUpR" class="lid" x="410" y="-20" width="460" height="340" />
+            <rect id="lidLoR" class="lid" x="410" y="620" width="460" height="300" />
+          </g>
+          <circle class="rim" cx="640" cy="470" r="155" fill="none" />
+        </g>
+
+        <!-- MOUTH: lips path + clipped teeth/tongue -->
+        <path id="mouth" d="" fill="#5a2235" />
+        <g clip-path="url(#mouthClip)">
+          <rect id="teeth" x="370" y="650" width="260" height="74" rx="20" fill="#fffdf6" />
+          <ellipse id="tongue" cx="500" cy="772" rx="120" ry="78" fill="#ff7a9c" />
+        </g>
+
+        <!-- floating FX overlays -->
+        <g id="fxSweat" class="fx" opacity="0">
+          <path d="M772 322 C 754 350, 748 372, 766 384 C 786 374, 788 350, 772 322 Z" fill="#7fd4ff" stroke="#39a7e6" stroke-width="3" />
+        </g>
+        <g id="fxTears" class="fx" opacity="0">
+          <path class="tear" d="M278 560 C 266 584, 262 602, 280 612 C 298 604, 294 584, 278 560 Z" fill="#8fd6ff" stroke="#46aee8" stroke-width="3" />
+          <path class="tear" d="M722 560 C 710 584, 706 602, 724 612 C 742 604, 738 584, 722 560 Z" fill="#8fd6ff" stroke="#46aee8" stroke-width="3" />
+        </g>
+        <g id="fxThink" class="fx" opacity="0">
+          <circle class="tdot" cx="724" cy="318" r="14" fill="#7a89b8" />
+          <circle class="tdot" cx="766" cy="300" r="11" fill="#7a89b8" />
+          <circle class="tdot" cx="800" cy="286" r="8"  fill="#7a89b8" />
+        </g>
+        <g id="fxZzz" class="fx" opacity="0">
+          <text class="zzz" x="720" y="300">z</text>
+          <text class="zzz" x="760" y="262">z</text>
+          <text class="zzz" x="804" y="226">z</text>
+        </g>
+        <g id="fxHearts" class="fx" opacity="0">
+          <path class="floatheart" d="" fill="#ff5b86" />
+          <path class="floatheart" d="" fill="#ff86a8" />
+          <path class="floatheart" d="" fill="#ff5b86" />
+        </g>
+        <g id="fxSparkles" class="fx" opacity="0">
+          <path class="spark" d="" fill="#fff3b0" />
+          <path class="spark" d="" fill="#fff3b0" />
+          <path class="spark" d="" fill="#fff3b0" />
+          <path class="spark" d="" fill="#fff3b0" />
+          <path class="spark" d="" fill="#fff3b0" />
+        </g>
+      </g>
+    </svg>
+
+    <!-- DEBUG PANEL -->
+    <div id="panel">
+      <div id="panelHead">
+        <span id="dot" class="dot off" title="WebSocket"></span>
+        <strong id="creatureName">companion</strong>
+        <button id="panelToggle" title="hide (`)">×</button>
+      </div>
+      <div id="emoGrid"></div>
+      <div id="controls">
+        <button data-act="cycle">▶ auto-cycle <kbd>a</kbd></button>
+        <button data-act="idle">idle: on <kbd>i</kbd></button>
+        <button data-act="poke">poke <kbd>p</kbd></button>
+        <button data-act="fullscreen">fullscreen <kbd>f</kbd></button>
+      </div>
+      <div id="status">emotion: <b id="curEmo">neutral</b> · <span id="curProfile">normal</span></div>
+      <div id="hint">keys 1–9 0 - = pick emotion · space = next · ` = panel</div>
+    </div>
+  </div>
+
+  <script src="/face.js"></script>
+</body>
+</html>

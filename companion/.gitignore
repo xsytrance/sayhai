@@ -1,0 +1,20 @@
+# secrets / local config
+.env
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+*.egg-info/
+
+# runtime state (data dir is tracked, but its live contents are not)
+data/*.json
+!data/.gitkeep
+
+# os / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
