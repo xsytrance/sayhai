@@ -78,26 +78,36 @@ poses by hand: keys `1–9 0 - =`, `Space` = next, `p`/click = poke, `i` = idle 
 The 12 emotions — `neutral, happy, excited, mischievous, curious, thinking, surprised,
 sad, sleepy, grumpy, love, dizzy` — are the fixed set the whole project speaks in.
 
-## How a reply flows (Phase 1)
+## How a reply flows (Phase 1 — streamed for near-real-time)
 
 ```
-you type ──▶ POST /api/say ──▶ switchboard
-                                  │  1. broadcast {emotion: "thinking"}      → face shows thinking
-                                  │  2. brain.respond(text)  → Ollama        → {emotion, text}
-                                  │  3. voice.speak(text, emotion) → Kokoro  → WAV bytes
-                                  └─ 4. broadcast {type:"say", emotion, text, audio}
-                                                                             ▼
-                                          face: set pose · play WAV (Web Audio) ·
-                                          mouth-openness = live audio amplitude (RMS)
+you type ─▶ POST /api/say ─▶ switchboard.converse()
+        │ broadcast {emotion:"thinking"}                         → face: thinking
+        │ stream tokens from Ollama (think=false) ──┐
+        │   "[excited]" parsed  ─▶ broadcast {emotion:"excited"} → face: pose pops NOW
+        │   "…first clause,"    ─▶ queue ─▶ Kokoro ─▶ {type:"speak", audio} → face plays it
+        │   "…rest of it."      ─▶ queue ─▶ Kokoro ─▶ {type:"speak", audio} → gapless next
+        └── (synthesis overlaps generation; chunks stay in order)
+                                                      ▼
+                         face queues WAV chunks (Web Audio, scheduled back-to-back) ·
+                         mouth-openness = live audio amplitude (RMS)
 ```
 
-- **Structured emotion:** the brain is asked for `{"emotion","text"}` via a JSON schema,
-  and `brain.parse_reply` is paranoid — strips `<think>`/code fences, digs the JSON out
-  of noise, validates the emotion, and never crashes (worst case: speaks the prose).
+- **Emotion first, instantly:** the reply starts with `[emotion]`, so the face strikes
+  the pose on the first token instead of after the whole reply.
+- **Streamed + chunked voice:** clauses are synthesized and played as they're generated,
+  so the first words land in a beat — not after a paragraph. `brain.parse_reply` (the
+  non-stream fallback) still tolerates `[emotion] text`, JSON, or bare prose, strips
+  `<think>`, and never crashes.
 - **Voice is swappable:** everything routes through `voice.speak(text, emotion)`. Kokoro
   is the first engine; Orpheus / ElevenLabs (Phase 6) drop in behind the same call.
-- **Lip-sync** is amplitude-only (loud = open), measured from the exact buffer that
-  plays, so it stays in sync. No phoneme mapping.
+- **Lip-sync** is amplitude-only (loud = open), measured from the exact buffers that
+  play, so it stays in sync. No phoneme mapping.
+
+### Tuned for speed
+Non-thinking mode (`think=false`, the big Qwen3 win), streamed token-by-token, short
+`num_predict`, capped `num_ctx`, a long `keep_alive`, and a **startup warm-up** that
+pre-loads the model + voice so the first message isn't a cold start. Knobs live in `.env`.
 
 ## Layout
 

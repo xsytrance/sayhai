@@ -76,42 +76,127 @@ _speak_lock = asyncio.Lock()
 
 
 async def converse(text: str) -> dict:
-    """The Phase 1 core: text in -> thinking face -> brain -> voice -> spoken reply.
+    """The Phase 1 core, streamed for a near-real-time feel.
 
-    1. Push the ``thinking`` pose so the face reacts while Ollama generates.
-    2. Ask the brain for ``{emotion, text}``.
-    3. Synthesize the reply (Kokoro). If voice is unavailable, carry on silently.
-    4. Broadcast one ``say`` message: the face sets the emotion, plays the audio,
-       and lip-syncs the mouth to its amplitude.
+    1. Push ``thinking`` immediately.
+    2. Stream tokens from the brain. The reply begins with ``[emotion]`` — the
+       moment we parse it we push the pose (no waiting for the whole reply).
+    3. As complete clauses/sentences arrive, hand them to the voice and stream the
+       audio chunks to the face, which queues and plays them gaplessly while the
+       model is still generating the rest.
+
+    A worker consumes a queue so synthesis overlaps generation; chunks stay in
+    order. Voice failures degrade gracefully (face + pose, just silent).
     """
+    text = (text or "").strip()
+    if not text:
+        return {"emotion": "curious", "text": "hm? you didn't say anything.",
+                "spoke": False, "voice_error": None}
+
     async with _speak_lock:
         await hub.broadcast({"type": "emotion", "emotion": "thinking"})
-        reply = await brain.respond(text)
-        emotion, spoken = reply["emotion"], reply["text"]
 
-        audio_b64 = None
-        voice_error = None
+        q: asyncio.Queue = asyncio.Queue()
+        state = {"voice_error": None}
+
+        async def consumer() -> None:
+            while True:
+                item = await q.get()
+                if item is None:
+                    return
+                sentence, emo = item
+                if state["voice_error"]:
+                    continue  # voice known-bad; drain the rest quietly
+                try:
+                    wav = await voice.speak(sentence, emo)
+                    await hub.broadcast({
+                        "type": "speak",
+                        "audio": base64.b64encode(wav).decode("ascii"),
+                        "mime": "audio/wav",
+                    })
+                except voice.VoiceUnavailable as e:
+                    state["voice_error"] = str(e)
+                    log.warning("voice unavailable — speaking silently: %s", e)
+                except Exception as e:  # never let TTS take down the reply
+                    state["voice_error"] = f"voice error: {e}"
+                    log.exception("voice synthesis failed")
+
+        consumer_task = asyncio.create_task(consumer())
+
+        emotion: str | None = None
+        buf = ""
+        parts: list[str] = []
+        first_chunk = True
         try:
-            wav = await voice.speak(spoken, emotion)
-            audio_b64 = base64.b64encode(wav).decode("ascii")
-        except voice.VoiceUnavailable as e:
-            voice_error = str(e)
-            log.warning("voice unavailable — showing %s silently: %s", emotion, e)
-        except Exception as e:  # never let TTS take down the reply
-            voice_error = f"voice error: {e}"
-            log.exception("voice synthesis failed")
+            async for delta in brain.stream_tokens(text):
+                buf += delta
+                if emotion is None:
+                    stripped = brain.strip_leading_think(buf)
+                    if stripped is None:
+                        continue  # a <think> block is open; wait it out
+                    emo, rest = brain.split_emotion_prefix(stripped)
+                    if emo is not None:
+                        emotion = emo
+                        await hub.broadcast({"type": "emotion", "emotion": emotion})
+                        buf = rest
+                    elif len(stripped) >= 40 or any(p in stripped for p in ".!?"):
+                        emotion = "neutral"  # model skipped the tag; stop waiting
+                        await hub.broadcast({"type": "emotion", "emotion": emotion})
+                        buf = stripped
+                    else:
+                        continue
+                while True:
+                    chunk, buf = brain.take_chunk(buf, allow_comma=first_chunk)
+                    if chunk is None:
+                        break
+                    if chunk:
+                        parts.append(chunk)
+                        await q.put((chunk, emotion))
+                        first_chunk = False
+        except Exception:
+            log.exception("brain stream failed")
+            if emotion is None:
+                emotion = "dizzy"
+                await hub.broadcast({"type": "emotion", "emotion": emotion})
+            if not parts:
+                parts.append(brain.BRAIN_DOWN_TEXT)
+                await q.put((brain.BRAIN_DOWN_TEXT, emotion))
 
-        msg = {"type": "say", "emotion": emotion, "text": spoken}
-        if audio_b64:
-            msg["audio"] = audio_b64
-            msg["mime"] = "audio/wav"
-        await hub.broadcast(msg)
+        if emotion is None:
+            emotion = "neutral"
+            await hub.broadcast({"type": "emotion", "emotion": emotion})
+        tail = buf.strip()
+        if tail:
+            parts.append(tail)
+            await q.put((tail, emotion))
+
+        await q.put(None)
+        await consumer_task
+
+        full = " ".join(p for p in parts if p).strip()
+        if full:
+            brain.remember(text, full)
         return {
             "emotion": emotion,
-            "text": spoken,
-            "spoke": audio_b64 is not None,
-            "voice_error": voice_error,
+            "text": full,
+            "spoke": state["voice_error"] is None and bool(full),
+            "voice_error": state["voice_error"],
         }
+
+
+async def _warmup() -> None:
+    """Load the model + voice into memory so the first real turn is snappy."""
+    await brain.warmup()
+    try:
+        await voice.speak("ready", "neutral")  # forces Kokoro to load its ONNX
+    except Exception:
+        pass
+
+
+@app.on_event("startup")
+async def _on_startup() -> None:
+    if config.WARMUP:
+        asyncio.create_task(_warmup())
 
 
 class SayIn(BaseModel):

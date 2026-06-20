@@ -418,7 +418,10 @@
   //  (the same buffer that plays is the one we measure).
   // ---------------------------------------------------------------------------
   const LIP_GAIN = 170;                 // how far the mouth opens at full volume
-  const lip = { ctx: null, analyser: null, data: null, src: null, speaking: false, amp: 0 };
+  // pending = audio buffers still to finish; nextStart schedules chunks back-to-back
+  // for gapless streamed playback; chain serializes decode so chunks never swap order.
+  const lip = { ctx: null, analyser: null, data: null, speaking: false, amp: 0,
+                pending: 0, nextStart: 0, chain: Promise.resolve() };
 
   function ensureAudio() {
     if (lip.ctx) return lip.ctx;
@@ -439,19 +442,25 @@
     for (let i = 0; i < n; i++) bytes[i] = bin.charCodeAt(i);
     return bytes.buffer;
   }
-  async function playAudio(b64) {
+  // Queue a streamed audio chunk. Decoding + scheduling run on a promise chain so
+  // chunks always play in arrival order, scheduled back-to-back for gapless speech.
+  function enqueueAudio(b64) {
     const ctx = ensureAudio();
     if (!ctx) return;
-    if (ctx.state === "suspended") { try { await ctx.resume(); } catch { /* needs a gesture */ } }
-    let buf;
-    try { buf = await ctx.decodeAudioData(b64ToBuf(b64)); } catch { return; }
-    if (lip.src) { try { lip.src.stop(); } catch { /* already stopped */ } }
-    const src = ctx.createBufferSource();
-    src.buffer = buf;
-    src.connect(lip.analyser);
-    src.onended = () => { if (lip.src === src) { lip.speaking = false; lip.src = null; } };
-    lip.src = src; lip.speaking = true;
-    src.start();
+    lip.chain = lip.chain.then(async () => {
+      if (ctx.state === "suspended") { try { await ctx.resume(); } catch { /* needs a gesture */ } }
+      let buf;
+      try { buf = await ctx.decodeAudioData(b64ToBuf(b64)); } catch { return; }
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.connect(lip.analyser);
+      const startAt = Math.max(ctx.currentTime, lip.nextStart);
+      src.start(startAt);
+      lip.nextStart = startAt + buf.duration;
+      lip.pending++;
+      lip.speaking = true;
+      src.onended = () => { if (--lip.pending <= 0) { lip.pending = 0; lip.speaking = false; } };
+    }).catch(() => {});
   }
   function updateLip() {
     let target = 0;
@@ -582,9 +591,10 @@
     ws.onmessage = (ev) => {
       let m; try { m = JSON.parse(ev.data); } catch { return; }
       if (m.type === "emotion" && POSES[m.emotion]) applyPose(m.emotion);
-      else if (m.type === "say") {
-        if (POSES[m.emotion]) applyPose(m.emotion);   // set the mood
-        if (m.audio) playAudio(m.audio);              // speak + lip-sync
+      else if (m.type === "speak") { if (m.audio) enqueueAudio(m.audio); }   // streamed chunk
+      else if (m.type === "say") {                                           // non-stream fallback
+        if (POSES[m.emotion]) applyPose(m.emotion);
+        if (m.audio) enqueueAudio(m.audio);
       }
       else if (m.type === "hello" && m.name) setName(m.name);
     };

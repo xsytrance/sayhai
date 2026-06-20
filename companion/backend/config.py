@@ -74,16 +74,22 @@ DESIGN_HEIGHT = int(_get("DESIGN_HEIGHT", "1600"))
 # Brain (Ollama) — Phase 1
 # ---------------------------------------------------------------------------
 OLLAMA_HOST = _get("OLLAMA_HOST", "http://localhost:11434")
-# The chat model. Set this to one you've pulled, e.g. "llama3.2:3b", "qwen2.5:3b".
-OLLAMA_MODEL = _get("OLLAMA_MODEL", "llama3.2:3b")
+# The chat model. Set this to one you've pulled, e.g. "qwen3:4b", "llama3.2:3b".
+OLLAMA_MODEL = _get("OLLAMA_MODEL", "qwen3.5:4b")
 # Keep replies short & quippy; cap generation so it can't ramble into an essay.
-OLLAMA_NUM_PREDICT = int(_get("OLLAMA_NUM_PREDICT", "200"))
+# Shorter = faster first audio. Parrot quips rarely need more.
+OLLAMA_NUM_PREDICT = int(_get("OLLAMA_NUM_PREDICT", "120"))
 OLLAMA_TEMPERATURE = float(_get("OLLAMA_TEMPERATURE", "0.8"))
+# Context window. Smaller = faster + less RAM (helps the roommate problem). The
+# system prompt + a few short turns fit easily in 2k.
+OLLAMA_NUM_CTX = int(_get("OLLAMA_NUM_CTX", "2048"))
 # How long Ollama keeps the model resident between turns (snappier replies).
-OLLAMA_KEEP_ALIVE = _get("OLLAMA_KEEP_ALIVE", "10m")
+OLLAMA_KEEP_ALIVE = _get("OLLAMA_KEEP_ALIVE", "30m")
 # How many recent turns of conversation to feed back as context (RAM only;
 # real persisted memory is Phase 7).
-HISTORY_TURNS = int(_get("HISTORY_TURNS", "8"))
+HISTORY_TURNS = int(_get("HISTORY_TURNS", "6"))
+# Prime the brain + voice on startup so the first message isn't a cold start.
+WARMUP = _get("WARMUP", "true").lower() in ("1", "true", "yes", "on")
 
 # ---------------------------------------------------------------------------
 # Voice OUT — Phase 1 (Kokoro). Orpheus/ElevenLabs are Phase 6.
