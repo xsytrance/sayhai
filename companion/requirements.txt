@@ -16,7 +16,10 @@ numpy>=1.24
 # Speech-to-text. Model (base.en, ~150MB) auto-downloads on first use.
 faster-whisper>=1.0
 
+# --- Phase 3: channels (text it from anywhere) ---
+python-telegram-bot>=21
+# (voice-note replies also want ffmpeg on PATH — a system package, not pip)
+
 # --- Later phases (roadmap; install when you get there) ---
-# Phase 3 channels: python-telegram-bot
 # Phase 4 senses:   sounddevice  winsdk
 # Phase 6 cloud:    elevenlabs

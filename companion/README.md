@@ -15,8 +15,8 @@ and the animation springiness together.
 
 - ✅ **Phase 0 — Scaffold + the alive face**
 - ✅ **Phase 1 — Brain + Voice OUT + Emotion**
-- ✅ **Phase 2 — Ears (Voice IN)** *(current)*
-- ⬜ Phase 3 — Channels (text it from anywhere)
+- ✅ **Phase 2 — Ears (Voice IN)**
+- ✅ **Phase 3 — Channels (text it from anywhere)** *(current)*
 - ⬜ Phase 4 — Senses (the nervous system)
 - ⬜ Phase 5 — The Tamagotchi layer
 - ⬜ Phase 6 — Voice upgrades (Orpheus / ElevenLabs)
@@ -80,8 +80,21 @@ for a physical push-to-talk.
 **shuts up and listens** — the in-flight reply is cancelled, not just muted.
 
 > Mic needs a secure context, so voice-in works on the Go at `localhost` (and over
-> https), but **not** from a phone over plain `http://<lan-ip>` — that's text-only until
-> Phase 3 adds proper channels.
+> https), but **not** from a phone over plain `http://<lan-ip>`. Use Telegram (below)
+> to reach it from your actual phone, anywhere.
+
+### 6. Text it from anywhere (Phase 3 — Telegram)
+Talk to Chatty from your phone over the internet — no port-forwarding, nothing
+exposed on your network (Telegram relays it).
+
+1. In Telegram, message **@BotFather** → `/newbot` → copy the token.
+2. Put it in `.env`: `TELEGRAM_TOKEN=123456:ABC...` (optionally lock it to yourself
+   with `TELEGRAM_ALLOWED_IDS=<your-telegram-user-id>`).
+3. Restart `python -m backend.main`. Message your bot — Chatty **speaks on the Go**
+   *and* replies in the chat. With `ffmpeg` installed it also sends a **voice note**
+   (`TELEGRAM_VOICE=true`).
+
+The bot starts automatically when a token is present and is silent otherwise.
 
 ## Play with the face (Phase 0 controls)
 

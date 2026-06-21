@@ -24,6 +24,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import brain, config, ears, voice
+from .channels import telegram_bot
 
 log = logging.getLogger("companion")
 
@@ -226,10 +227,27 @@ async def _warmup() -> None:
         pass
 
 
+_tg_app = None  # the running Telegram Application, if any
+
+
 @app.on_event("startup")
 async def _on_startup() -> None:
     if config.WARMUP:
         asyncio.create_task(_warmup())
+    if config.TELEGRAM_TOKEN:
+        global _tg_app
+        try:
+            _tg_app = await telegram_bot.start(start_conversation)
+        except Exception:
+            log.exception("Telegram channel failed to start")
+
+
+@app.on_event("shutdown")
+async def _on_shutdown() -> None:
+    global _tg_app
+    if _tg_app is not None:
+        await telegram_bot.stop(_tg_app)
+        _tg_app = None
 
 
 class SayIn(BaseModel):

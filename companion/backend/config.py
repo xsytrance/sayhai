@@ -122,9 +122,14 @@ STT_COMPUTE = _get("STT_COMPUTE", "int8")
 STT_LANG = _get("STT_LANG", "en")  # blank to auto-detect (slower)
 
 # ---------------------------------------------------------------------------
-# Channels — Phase 3 (declared early, unused until then)
+# Channels — Phase 3 (Telegram: text it from anywhere)
 # ---------------------------------------------------------------------------
+# Create a bot with @BotFather and paste the token. Blank = Telegram off.
 TELEGRAM_TOKEN = _get("TELEGRAM_TOKEN", "")
+# Also reply with a spoken voice note (stretch). Needs ffmpeg on PATH.
+TELEGRAM_VOICE = _get("TELEGRAM_VOICE", "true").lower() in ("1", "true", "yes", "on")
+# Lock the bot to specific Telegram user IDs (comma-separated). Blank = anyone.
+TELEGRAM_ALLOWED_IDS = [s.strip() for s in _get("TELEGRAM_ALLOWED_IDS", "").split(",") if s.strip()]
 
 
 def resolve_path(p: str) -> Path:
