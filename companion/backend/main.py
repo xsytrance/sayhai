@@ -270,6 +270,43 @@ async def health() -> JSONResponse:
     )
 
 
+@app.get("/api/diag")
+async def diag() -> JSONResponse:
+    """One-glance setup check: is the brain/voice/ears actually wired up? Open
+    http://127.0.0.1:8000/api/diag if something isn't reacting."""
+    import shutil
+
+    info: dict = {
+        "name": config.CREATURE_NAME,
+        "ollama_model": config.OLLAMA_MODEL,
+        "voice_engine": config.VOICE_ENGINE,
+        "faces_connected": hub.count,
+    }
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=3.0) as c:
+            r = await c.get(f"{config.OLLAMA_HOST.rstrip('/')}/api/tags")
+            names = [m.get("name", "") for m in r.json().get("models", [])]
+            base = config.OLLAMA_MODEL.split(":")[0]
+            info["ollama"] = "up"
+            info["ollama_has_model"] = any(
+                t == config.OLLAMA_MODEL or t.split(":")[0] == base for t in names
+            )
+    except Exception as e:
+        info["ollama"] = f"unreachable ({type(e).__name__})"
+
+    info["kokoro_model_present"] = config.resolve_path(config.KOKORO_MODEL).exists()
+    info["kokoro_voices_present"] = config.resolve_path(config.KOKORO_VOICES).exists()
+    try:
+        import faster_whisper  # noqa: F401
+        info["faster_whisper"] = "installed"
+    except Exception:
+        info["faster_whisper"] = "MISSING — pip install faster-whisper"
+    info["ffmpeg"] = bool(shutil.which("ffmpeg"))   # for Telegram voice notes
+    info["telegram"] = "on" if config.TELEGRAM_TOKEN else "off"
+    return JSONResponse(info)
+
+
 @app.get("/api/emotions")
 async def emotions() -> JSONResponse:
     """The canonical emotion set. The frontend fetches this so the face and the

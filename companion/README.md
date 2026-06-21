@@ -96,6 +96,19 @@ exposed on your network (Telegram relays it).
 
 The bot starts automatically when a token is present and is silent otherwise.
 
+## Troubleshooting
+
+Open **http://127.0.0.1:8000/api/diag** — it reports, in one glance, whether Ollama is
+reachable (and has your model), the Kokoro files are present, `faster-whisper` is
+installed, and `ffmpeg` is available.
+
+- **Silent / no voice:** click the face once to unlock audio; check `kokoro_*_present`
+  in `/api/diag` (files go in the `companion/` folder).
+- **Mic does nothing:** the on-screen caption now tells you why (permission, missing
+  STT, etc.); details also print to the browser console (`[voice]`). If diag says
+  `faster_whisper: MISSING`, run `pip install faster-whisper`. Mic only works on
+  `localhost`/https (not a LAN IP over http).
+
 ## Play with the face (Phase 0 controls)
 
 Still alive on its own (blinks, eye wander, breathing). A debug panel (top-left) drives

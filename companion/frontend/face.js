@@ -498,8 +498,9 @@
   //  send. Starting to talk barges in (stops Chatty mid-sentence). Capture is in
   //  the browser; faster-whisper transcribes on the backend.
   // ---------------------------------------------------------------------------
-  const rec = { media: null, chunks: [], stream: null, active: false };
+  const rec = { media: null, chunks: [], stream: null, active: false, starting: false, stopRequested: false };
   let captionTimer = null;
+  const vlog = (...a) => console.log("[voice]", ...a);   // open devtools to watch the flow
 
   function showCaption(text, listening) {
     const c = $("caption");
@@ -508,55 +509,92 @@
     c.classList.toggle("listening", !!listening);
     c.classList.add("show");
     clearTimeout(captionTimer);
-    if (!listening) captionTimer = setTimeout(() => c.classList.remove("show"), 3200);
+    if (!listening) captionTimer = setTimeout(() => c.classList.remove("show"), 3600);
   }
   function hideCaption() {
     const c = $("caption");
     if (c) { clearTimeout(captionTimer); c.classList.remove("show"); }
   }
 
+  function pickMime() {
+    const types = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/mp4"];
+    if (window.MediaRecorder && MediaRecorder.isTypeSupported) {
+      for (const t of types) if (MediaRecorder.isTypeSupported(t)) return t;
+    }
+    return "";
+  }
+
   async function startListening() {
-    if (rec.active) return;
+    if (rec.active || rec.starting) return;
+    rec.starting = true; rec.stopRequested = false;
     ensureAudio(); resumeAudio();
     stopSpeaking();                              // barge-in: hush mid-sentence
-    if (!navigator.mediaDevices || !window.MediaRecorder) { showCaption("no mic here"); return; }
+    if (!navigator.mediaDevices || !window.MediaRecorder) {
+      rec.starting = false; showCaption("this browser can't record audio"); vlog("no mediaDevices/MediaRecorder"); return;
+    }
     let stream;
-    try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
-    catch { showCaption("mic blocked (needs localhost or https)"); return; }
-    rec.stream = stream; rec.chunks = [];
-    try { rec.media = new MediaRecorder(stream); }
-    catch { stream.getTracks().forEach((t) => t.stop()); showCaption("recording unsupported"); return; }
-    rec.media.ondataavailable = (e) => { if (e.data && e.data.size) rec.chunks.push(e.data); };
-    rec.media.onstop = () => {
-      const blob = new Blob(rec.chunks, { type: rec.media.mimeType || "audio/webm" });
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (e) {
+      rec.starting = false;
+      const why = (e && e.name) ? e.name : "blocked";
+      showCaption("mic " + why + " — allow it (and use localhost/https)");
+      vlog("getUserMedia failed:", why, e);
+      return;
+    }
+    let media;
+    try {
+      const mime = pickMime();
+      media = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+    } catch (e) {
+      stream.getTracks().forEach((t) => t.stop());
+      rec.starting = false; showCaption("recording unsupported here"); vlog("MediaRecorder failed:", e); return;
+    }
+    rec.media = media; rec.stream = stream; rec.chunks = [];
+    media.ondataavailable = (e) => { if (e.data && e.data.size) rec.chunks.push(e.data); };
+    media.onstop = () => {
+      const blob = new Blob(rec.chunks, { type: media.mimeType || "audio/webm" });
       if (rec.stream) { rec.stream.getTracks().forEach((t) => t.stop()); rec.stream = null; }
+      vlog("stopped; blob", blob.size, "bytes", blob.type);
       sendAudio(blob);
     };
-    rec.media.start();
-    rec.active = true;
+    media.start();
+    rec.active = true; rec.starting = false;
     $("mic") && $("mic").classList.add("recording");
     showCaption("listening…", true);
+    vlog("recording:", media.mimeType);
+    if (rec.stopRequested) stopListening();      // released before the mic came up
   }
+
   function stopListening() {
+    if (rec.starting) { rec.stopRequested = true; return; }   // stop the instant it starts
     if (!rec.active) return;
     rec.active = false;
     $("mic") && $("mic").classList.remove("recording");
     showCaption("…", true);
-    try { rec.media.stop(); } catch { hideCaption(); }
+    try { rec.media.stop(); } catch (e) { hideCaption(); vlog("stop() failed:", e); }
   }
+
   async function sendAudio(blob) {
-    if (!blob || blob.size < 1200) { hideCaption(); return; }   // too short = nothing said
+    if (!blob || blob.size < 1400) { showCaption("didn't catch that — hold a beat longer"); vlog("blob too short"); return; }
     showCaption("…thinking", true);
+    let r, j;
     try {
-      const r = await fetch("/api/listen", {
+      r = await fetch("/api/listen", {
         method: "POST",
         headers: { "Content-Type": blob.type || "application/octet-stream" },
         body: blob,
       });
-      const j = await r.json();
-      if (j && j.transcript) showCaption("“" + j.transcript + "”");
-      else hideCaption();                       // heard nothing usable
-    } catch { showCaption("couldn't reach the brain"); }
+    } catch (e) { showCaption("couldn't reach the server"); vlog("fetch failed:", e); return; }
+    try { j = await r.json(); } catch { j = null; }
+    vlog("listen", r.status, j);
+    if (!r.ok || !j || j.ok === false) {
+      const err = (j && j.error) ? j.error.split("\n")[0] : ("server error " + r.status);
+      showCaption("🔇 " + err);                 // surface STT/install errors instead of hiding
+      return;
+    }
+    if (j.transcript) showCaption("“" + j.transcript + "”");
+    else showCaption("didn't catch that — try again");
   }
 
   // ---------------------------------------------------------------------------
@@ -665,15 +703,18 @@
   window.addEventListener("pointerdown", unlock, { once: true });
   window.addEventListener("keydown", unlock, { once: true });
 
-  // hold-to-talk mic button (touch / mouse)
+  // hold-to-talk mic button (touch / mouse). Pointer capture keeps the release
+  // event on the button even if the finger drifts, so it can't get stuck recording.
   const micBtn = $("mic");
   if (micBtn) {
-    const down = (e) => { e.preventDefault(); startListening(); };
-    const up = (e) => { e.preventDefault(); stopListening(); };
-    micBtn.addEventListener("pointerdown", down);
-    micBtn.addEventListener("pointerup", up);
-    micBtn.addEventListener("pointerleave", up);
-    micBtn.addEventListener("pointercancel", up);
+    micBtn.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      try { micBtn.setPointerCapture(e.pointerId); } catch { /* ok */ }
+      startListening();
+    });
+    const end = (e) => { e.preventDefault(); stopListening(); };
+    micBtn.addEventListener("pointerup", end);
+    micBtn.addEventListener("pointercancel", end);
   }
 
   // ---------------------------------------------------------------------------
