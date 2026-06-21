@@ -35,10 +35,21 @@ class Ears:
             raise EarsUnavailable(
                 "faster-whisper not installed. Run: pip install faster-whisper"
             ) from e
-        # First load downloads the model (~150MB for base) and caches it.
-        self._model = WhisperModel(
-            config.STT_MODEL, device=config.STT_DEVICE, compute_type=config.STT_COMPUTE
-        )
+        # First load downloads the model (~150MB for base) and caches it. A bad/
+        # partial download makes CTranslate2 choke parsing the model config — turn
+        # that into an actionable message instead of a cryptic JSON parse error.
+        try:
+            self._model = WhisperModel(
+                config.STT_MODEL, device=config.STT_DEVICE, compute_type=config.STT_COMPUTE
+            )
+        except EarsUnavailable:
+            raise
+        except Exception as e:
+            raise EarsUnavailable(
+                f"couldn't load STT model '{config.STT_MODEL}' ({type(e).__name__}: {e}). "
+                "The download is likely incomplete/corrupt — clear it and retry: "
+                "rm -rf ~/.cache/huggingface/hub/*faster-whisper*"
+            ) from e
 
     def transcribe(self, audio: bytes) -> str:
         self._ensure()
