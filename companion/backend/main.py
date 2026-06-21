@@ -201,9 +201,12 @@ async def converse(text: str, remember: bool = True) -> dict:
             await q.put((tail, emotion))
 
         await q.put(None)
+        full = " ".join(p for p in parts if p).strip()
+        if full:
+            # show his words on the face (subtitle), even when voice is off
+            await hub.broadcast({"type": "reply", "text": full, "emotion": emotion})
         await consumer_task
 
-        full = " ".join(p for p in parts if p).strip()
         if full and remember:
             brain.remember(text, full)
         return {
@@ -395,6 +398,13 @@ async def control_page() -> FileResponse:
     """The phone/desktop control page: a text box to message the creature.
     Point any device on the same wi-fi at http://<this-machine>:PORT/control ."""
     return FileResponse(config.FRONTEND_DIR / "control.html")
+
+
+@app.post("/api/reset")
+async def api_reset() -> JSONResponse:
+    """Wipe the short-term conversation memory (e.g. if it gets confused/loopy)."""
+    brain.reset_history()
+    return JSONResponse({"ok": True})
 
 
 @app.post("/api/say")

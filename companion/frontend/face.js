@@ -506,10 +506,21 @@
     const c = $("caption");
     if (!c) return;
     c.textContent = text;
+    c.classList.remove("reply");
     c.classList.toggle("listening", !!listening);
     c.classList.add("show");
     clearTimeout(captionTimer);
     if (!listening) captionTimer = setTimeout(() => c.classList.remove("show"), 3600);
+  }
+  // his spoken reply, shown as a subtitle (distinct from your "you: …" line)
+  function showReply(text) {
+    const c = $("caption");
+    if (!c) return;
+    c.textContent = text;
+    c.classList.remove("listening");
+    c.classList.add("reply", "show");
+    clearTimeout(captionTimer);
+    captionTimer = setTimeout(() => c.classList.remove("show", "reply"), 6500);
   }
   function hideCaption() {
     const c = $("caption");
@@ -733,6 +744,7 @@
       else if (m.type === "speak") { if (m.audio) enqueueAudio(m.audio); }   // streamed chunk
       else if (m.type === "stop") stopSpeaking();                            // barge-in from elsewhere
       else if (m.type === "heard" && m.text) showCaption("“" + m.text + "”"); // what it transcribed
+      else if (m.type === "reply" && m.text) showReply(m.text);              // his words (subtitle)
       else if (m.type === "say") {                                           // non-stream fallback
         if (POSES[m.emotion]) applyPose(m.emotion);
         if (m.audio) enqueueAudio(m.audio);
