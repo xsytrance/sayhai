@@ -119,6 +119,10 @@ KOKORO_MODEL = _get("KOKORO_MODEL", "kokoro-v1.0.onnx")
 KOKORO_VOICES = _get("KOKORO_VOICES", "voices-v1.0.bin")
 KOKORO_VOICE = _get("KOKORO_VOICE", "af_heart")
 KOKORO_LANG = _get("KOKORO_LANG", "en-us")
+# Orpheus (Phase 6): emotional GGUF voice via llama.cpp + SNAC. Opt-in:
+#   VOICE_ENGINE=orpheus  (pip install orpheus-cpp llama-cpp-python)
+ORPHEUS_VOICE = _get("ORPHEUS_VOICE", "tara")   # tara, leah, jess, leo, dan, mia, zac, zoe
+ORPHEUS_GPU_LAYERS = int(_get("ORPHEUS_GPU_LAYERS", "0"))  # >0 to offload to GPU
 ELEVENLABS_API_KEY = _get("ELEVENLABS_API_KEY", "")
 
 # ---------------------------------------------------------------------------

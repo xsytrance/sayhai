@@ -362,6 +362,11 @@ async def diag() -> JSONResponse:
         info["faster_whisper"] = "installed"
     except Exception:
         info["faster_whisper"] = "MISSING — pip install faster-whisper"
+    try:
+        import orpheus_cpp  # noqa: F401
+        info["orpheus"] = "installed"
+    except Exception:
+        info["orpheus"] = "not installed (Kokoro is the default)"
     info["ffmpeg"] = bool(shutil.which("ffmpeg"))   # for Telegram voice notes
     info["telegram"] = "on" if config.TELEGRAM_TOKEN else "off"
     info["senses"] = "on" if config.SENSES_ENABLED else "off"

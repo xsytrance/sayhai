@@ -19,7 +19,7 @@ and the animation springiness together.
 - ✅ **Phase 3 — Channels (text it from anywhere)**
 - 🚧 **Phase 4 — Senses (the nervous system)** *(current — bus + clock + weather; music/motion/battery are device senses for the Go)*
 - ⬜ Phase 5 — The Tamagotchi layer
-- ⬜ Phase 6 — Voice upgrades (Orpheus / ElevenLabs)
+- 🚧 Phase 6 — Voice upgrades (Orpheus wired; ElevenLabs stubbed)
 - ⬜ Phase 7 — The soul polish
 
 ---
@@ -112,6 +112,19 @@ curl -X POST localhost:8000/api/chattiness -H 'content-type: application/json' -
 
 Music (now-playing + drops), motion (the Go's gyro — pickup/tilt/shake), and battery
 are **device senses** scaffolded for the Legion Go; they plug into the same bus.
+
+### Swap the voice — emotional Orpheus (Phase 6)
+Kokoro is the no-drama default. For a voice that actually **snickers, sighs, and
+gasps** with the mood, switch to Orpheus (local, GGUF via llama.cpp):
+```bash
+pip install orpheus-cpp
+pip install llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
+```
+Set `VOICE_ENGINE=orpheus` in `.env` (pick `ORPHEUS_VOICE`), restart. The first reply
+downloads the GGUF (~2–3GB) and is slow to warm up. The brain's emotion auto-selects the
+delivery — `mischievous` → `<chuckle>`, `sad` → `<sigh>`, etc. Flip back any time with
+`VOICE_ENGINE=kokoro`. Mind the roommate problem: Orpheus (~3B) shares 16GB with the chat
+model + Whisper, so keep the LLM small.
 
 ## Troubleshooting
 

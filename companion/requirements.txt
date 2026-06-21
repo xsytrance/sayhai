@@ -20,6 +20,11 @@ faster-whisper>=1.0
 python-telegram-bot>=21
 # (voice-note replies also want ffmpeg on PATH — a system package, not pip)
 
-# --- Later phases (roadmap; install when you get there) ---
-# Phase 4 senses:   sounddevice  winsdk
-# Phase 6 cloud:    elevenlabs
+# --- Phase 6: emotional voice (opt-in — heavy, not installed by default) ---
+# Orpheus (local emotional GGUF voice). Also needs the llama-cpp-python CPU wheel:
+#   pip install orpheus-cpp
+#   pip install llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
+# ElevenLabs (cloud voice): pip install elevenlabs
+
+# --- Phase 4 device senses (on the Go) ---
+# winsdk  sounddevice
