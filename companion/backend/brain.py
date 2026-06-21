@@ -50,8 +50,11 @@ Example: [mischievous] ohhh you put THAT song on again? bold.
 
 # --- request building -------------------------------------------------------
 
-def _messages(user_text: str) -> list[dict]:
-    msgs = [{"role": "system", "content": system_prompt()}]
+def _messages(user_text: str, status: str | None = None) -> list[dict]:
+    sys = system_prompt()
+    if status:
+        sys += "\n\nBODY STATE — " + status
+    msgs = [{"role": "system", "content": sys}]
     msgs += _history[-(config.HISTORY_TURNS * 2):]
     msgs.append({"role": "user", "content": user_text})
     return msgs
@@ -222,11 +225,11 @@ def remember(user_text: str, reply_text: str) -> None:
 
 # --- streaming + non-stream calls -------------------------------------------
 
-async def stream_tokens(user_text: str) -> AsyncIterator[str]:
+async def stream_tokens(user_text: str, status: str | None = None) -> AsyncIterator[str]:
     """Yield assistant content deltas from Ollama as they arrive.
 
     Retries once without ``think`` if an older build rejects it (400)."""
-    messages = _messages(user_text)
+    messages = _messages(user_text, status)
     async with httpx.AsyncClient(timeout=httpx.Timeout(120.0, connect=10.0)) as client:
         for attempt in range(2):
             payload = _payload(messages, stream=True)
@@ -253,12 +256,12 @@ async def stream_tokens(user_text: str) -> AsyncIterator[str]:
             return
 
 
-async def respond(user_text: str) -> dict:
+async def respond(user_text: str, status: str | None = None) -> dict:
     """Non-streaming one-shot (fallback / simple callers). Never raises."""
     user_text = (user_text or "").strip()
     if not user_text:
         return {"emotion": "curious", "text": "hm? you didn't say anything."}
-    messages = _messages(user_text)
+    messages = _messages(user_text, status)
     content = ""
     try:
         async with httpx.AsyncClient(timeout=120.0) as client:

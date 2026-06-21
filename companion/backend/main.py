@@ -23,11 +23,13 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import brain, config, ears, voice
+from . import brain, config, ears, game as game_mod, voice
 from .channels import telegram_bot
 from .senses import bus as senses_bus, clock, weather
 
 log = logging.getLogger("companion")
+
+_game = game_mod.Game(config.DATA_DIR / "state.json")
 
 
 class Hub:
@@ -97,7 +99,7 @@ async def start_conversation(text: str, ambient: bool = False) -> dict:
             await prev
         except asyncio.CancelledError:
             pass
-    task = asyncio.create_task(converse(text, remember=not ambient))
+    task = asyncio.create_task(converse(text, remember=not ambient, ambient=ambient))
     _current_convo = task
     try:
         return await task
@@ -106,7 +108,7 @@ async def start_conversation(text: str, ambient: bool = False) -> dict:
                 "voice_error": None, "cancelled": True}
 
 
-async def converse(text: str, remember: bool = True) -> dict:
+async def converse(text: str, remember: bool = True, ambient: bool = False) -> dict:
     """The streaming core (Phase 1), now cancellable for barge-in (Phase 2).
 
     1. Push ``thinking`` immediately.
@@ -123,7 +125,17 @@ async def converse(text: str, remember: bool = True) -> dict:
         return {"emotion": "curious", "text": "hm? you didn't say anything.",
                 "spoke": False, "voice_error": None}
 
+    # A real conversation turn is "attention is food": nourish + earn XP, and let
+    # the resulting body-state color the brain's mood. Ambient remarks don't feed.
+    status = None
+    if not ambient:
+        leveled = _game.on_interaction()
+        status = _game.status_line()
+
     await hub.broadcast({"type": "emotion", "emotion": "thinking"})
+    if not ambient and leveled["leveled_up"]:
+        await hub.broadcast({"type": "cosmetics", "items": _game.accessories()})
+        await hub.broadcast({"type": "levelup", "level": leveled["level"], "unlocked": leveled["unlocked"]})
 
     q: asyncio.Queue = asyncio.Queue()
     state = {"voice_error": None}
@@ -158,7 +170,7 @@ async def converse(text: str, remember: bool = True) -> dict:
     first_chunk = True
     try:
         try:
-            async for delta in brain.stream_tokens(text):
+            async for delta in brain.stream_tokens(text, status=status):
                 buf += delta
                 if emotion is None:
                     stripped = brain.strip_leading_think(buf)
@@ -239,6 +251,7 @@ async def _warmup() -> None:
 _tg_app = None       # the running Telegram Application, if any
 _bus = None          # the senses event bus
 _sensehub = None     # owns the sense source tasks
+_game_task = None    # the decay/needs tick loop
 
 
 async def _ambient_remark(summary: str) -> None:
@@ -278,16 +291,22 @@ async def _on_startup() -> None:
             _start_senses()
         except Exception:
             log.exception("senses failed to start")
+    global _game_task
+    _game_task = asyncio.create_task(_game_tick())
 
 
 @app.on_event("shutdown")
 async def _on_shutdown() -> None:
-    global _tg_app
+    global _tg_app, _game_task
     if _tg_app is not None:
         await telegram_bot.stop(_tg_app)
         _tg_app = None
     if _sensehub is not None:
         await _sensehub.stop()
+    if _game_task is not None:
+        _game_task.cancel()
+        _game_task = None
+    _game.save()
 
 
 class ChattinessIn(BaseModel):
@@ -308,6 +327,37 @@ async def set_chattiness(body: ChattinessIn) -> JSONResponse:
     if _reactor is not None:
         _reactor.chattiness = val
     return JSONResponse({"chattiness": val})
+
+
+@app.get("/api/game")
+async def get_game() -> JSONResponse:
+    """The Tamagotchi state: level, XP, hunger/energy/bond, unlocked stuff."""
+    return JSONResponse(_game.public())
+
+
+@app.post("/api/feed")
+async def feed() -> JSONResponse:
+    """Give it a treat — refills hunger + a dopamine bump, and it reacts out loud."""
+    leveled = _game.feed_treat()
+    await hub.broadcast({"type": "cosmetics", "items": _game.accessories()})
+    if leveled["leveled_up"]:
+        await hub.broadcast({"type": "levelup", "level": leveled["level"], "unlocked": leveled["unlocked"]})
+    # react happily, out loud (direct — not gated by chattiness)
+    asyncio.create_task(start_conversation(
+        "(yum! your human just handed you a treat — react, delighted)", ambient=True))
+    return JSONResponse({"ok": True, **_game.public()})
+
+
+async def _game_tick() -> None:
+    """Slowly get hungry / rest up; nudge the senses bus when peckish."""
+    prev_hungry = _game.hunger < 25
+    while True:
+        await asyncio.sleep(60)
+        _game.tick(1.0)
+        hungry = _game.hunger < 25
+        if hungry and not prev_hungry and _bus is not None:
+            await _bus.emit({"kind": "needs", "summary": "you're getting hungry", "weight": 0.8})
+        prev_hungry = hungry
 
 
 class SayIn(BaseModel):
@@ -371,6 +421,8 @@ async def diag() -> JSONResponse:
     info["telegram"] = "on" if config.TELEGRAM_TOKEN else "off"
     info["senses"] = "on" if config.SENSES_ENABLED else "off"
     info["chattiness"] = _reactor.chattiness if _reactor is not None else config.CHATTINESS
+    info["level"] = _game.level
+    info["hunger"] = round(_game.hunger)
     return JSONResponse(info)
 
 
@@ -453,6 +505,7 @@ async def ws_endpoint(ws: WebSocket) -> None:
     await hub.connect(ws)
     try:
         await ws.send_json({"type": "hello", "name": config.CREATURE_NAME})
+        await ws.send_json({"type": "cosmetics", "items": _game.accessories()})
         while True:
             data = await ws.receive_json()
             if not isinstance(data, dict):

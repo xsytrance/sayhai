@@ -17,8 +17,8 @@ and the animation springiness together.
 - ✅ **Phase 1 — Brain + Voice OUT + Emotion**
 - ✅ **Phase 2 — Ears (Voice IN)**
 - ✅ **Phase 3 — Channels (text it from anywhere)**
-- 🚧 **Phase 4 — Senses (the nervous system)** *(current — bus + clock + weather; music/motion/battery are device senses for the Go)*
-- ⬜ Phase 5 — The Tamagotchi layer
+- 🚧 **Phase 4 — Senses (the nervous system)** — bus + clock + weather; music/motion/battery are device senses for the Go
+- ✅ **Phase 5 — The Tamagotchi layer** *(current)*
 - 🚧 Phase 6 — Voice upgrades (Orpheus wired; ElevenLabs stubbed)
 - ⬜ Phase 7 — The soul polish
 
@@ -125,6 +125,21 @@ downloads the GGUF (~2–3GB) and is slow to warm up. The brain's emotion auto-s
 delivery — `mischievous` → `<chuckle>`, `sad` → `<sigh>`, etc. Flip back any time with
 `VOICE_ENGINE=kokoro`. Mind the roommate problem: Orpheus (~3B) shares 16GB with the chat
 model + Whisper, so keep the LLM small.
+
+### It grows (Phase 5 — Tamagotchi)
+Chatty has **hunger, energy, bond, XP, and levels**, persisted to `data/state.json`
+(it even gets a little hungry while the app is off). Crucially, the stats **feed the
+mood**: the brain is told its body-state each turn, so when it's hungry it gets grumpy
+and clipped; freshly fed or just leveled up, it's bouncy and generous.
+
+- **Attention is food:** every message nourishes it and earns XP.
+- **Treats:** the 🍪 button on `/control` (or `curl -X POST localhost:8000/api/feed`) —
+  a hunger refill + dopamine bump; it reacts out loud.
+- **Leveling unlocks** things you can *see* — cosmetic accessories pop onto the face
+  (bowtie → party hat → monocle → crown) — and *do* (jokes, trivia). `/control` shows a
+  live stats bar; `GET /api/game` has the full state.
+
+Gentle by design: neglect makes it sleepy/wistful, never guilt-trippy.
 
 ## Troubleshooting
 

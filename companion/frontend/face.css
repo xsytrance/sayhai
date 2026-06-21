@@ -43,6 +43,7 @@ html, body {
 .cheek { opacity: 0; }             /* driven by JS */
 .heart-pupil, .spiral, .fx { pointer-events: none; }
 .tuft { fill: url(#tuftGrad); stroke: #e8851f; stroke-width: 3; }
+.cosmetic { display: none; }      /* shown by JS as levels unlock them */
 
 #mouth { stroke: #3c1622; stroke-width: 6; }
 

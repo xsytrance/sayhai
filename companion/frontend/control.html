@@ -42,6 +42,13 @@
       background: var(--accent); color: #042b25; cursor: pointer;
     }
     button:disabled { opacity: 0.5; cursor: default; }
+    #statsbar {
+      display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+      padding: 8px 14px; font-size: 12.5px; color: #b7c2e4;
+      border-bottom: 1px solid rgba(120,200,255,0.10); background: rgba(255,255,255,0.02);
+    }
+    #statsbar b { color: var(--accent); text-transform: capitalize; }
+    #treat { background: #ffd24a; color: #4a3a00; padding: 0 14px; }
   </style>
 </head>
 <body>
@@ -50,9 +57,11 @@
     <span id="name">companion</span>
     <small>talk to it — it answers out loud on the screen</small>
   </header>
+  <div id="statsbar">level <b id="st-level">–</b> · hunger <b id="st-hunger">–</b> · energy <b id="st-energy">–</b> · bond <b id="st-bond">–</b></div>
   <div id="log"></div>
   <form id="form">
     <input id="text" autocomplete="off" placeholder="say something…" autofocus />
+    <button id="treat" type="button" title="give a treat">🍪</button>
     <button id="send" type="submit">Send</button>
   </form>
 
@@ -75,6 +84,24 @@
       if (j.name) { document.getElementById("name").textContent = j.name; document.title = j.name; }
       dot.classList.add("on");
     }).catch(() => {});
+
+    async function refreshGame() {
+      try {
+        const g = await (await fetch("/api/game")).json();
+        document.getElementById("st-level").textContent = g.level + " " + g.level_name;
+        document.getElementById("st-hunger").textContent = g.hunger + " (" + g.hunger_word + ")";
+        document.getElementById("st-energy").textContent = g.energy + " (" + g.energy_word + ")";
+        document.getElementById("st-bond").textContent = g.bond;
+      } catch {}
+    }
+    document.getElementById("treat").addEventListener("click", async () => {
+      try {
+        const g = await (await fetch("/api/feed", { method: "POST" })).json();
+        add("note", "🍪 nom! level " + g.level + " · hunger " + g.hunger);
+        refreshGame();
+      } catch {}
+    });
+    refreshGame();
 
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -100,6 +127,7 @@
       } finally {
         send.disabled = false;
         input.focus();
+        refreshGame();      // talking nourishes — stats moved
       }
     });
   </script>

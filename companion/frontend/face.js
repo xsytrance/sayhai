@@ -527,6 +527,16 @@
     if (c) { clearTimeout(captionTimer); c.classList.remove("show"); }
   }
 
+  // unlockable face accessories (toggled by level)
+  const ACCESSORIES = ["bowtie", "monocle", "party_hat", "crown"];
+  function applyCosmetics(items) {
+    const set = new Set(items || []);
+    for (const a of ACCESSORIES) {
+      const el = document.getElementById("acc-" + a);
+      if (el) el.style.display = set.has(a) ? "block" : "none";
+    }
+  }
+
   function pickMime() {
     const types = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/mp4"];
     if (window.MediaRecorder && MediaRecorder.isTypeSupported) {
@@ -745,6 +755,12 @@
       else if (m.type === "stop") stopSpeaking();                            // barge-in from elsewhere
       else if (m.type === "heard" && m.text) showCaption("“" + m.text + "”"); // what it transcribed
       else if (m.type === "reply" && m.text) showReply(m.text);              // his words (subtitle)
+      else if (m.type === "cosmetics") applyCosmetics(m.items);             // unlocked accessories
+      else if (m.type === "levelup") {                                      // celebrate a new level
+        const got = (m.unlocked || []).map((u) => u.ability || u.accessory).join(", ");
+        showReply("⭐ Level " + m.level + "!" + (got ? "  unlocked: " + got : ""));
+        applyPose("excited");
+      }
       else if (m.type === "say") {                                           // non-stream fallback
         if (POSES[m.emotion]) applyPose(m.emotion);
         if (m.audio) enqueueAudio(m.audio);
