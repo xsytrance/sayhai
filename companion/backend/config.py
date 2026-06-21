@@ -11,6 +11,7 @@ by hand with a tiny parser so Phase 0 has *zero* third-party config deps.
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
@@ -36,7 +37,14 @@ def _load_dotenv(path: Path) -> None:
             continue
         key, _, value = line.partition("=")
         key = key.strip()
-        value = value.strip().strip('"').strip("'")
+        value = value.strip()
+        if len(value) >= 2 and value[0] in "\"'" and value[-1] == value[0]:
+            value = value[1:-1]               # quoted: take verbatim ('#' allowed inside)
+        else:
+            m = re.search(r"\s#", value)      # strip an inline "  # comment"
+            if m:
+                value = value[: m.start()]
+            value = value.strip()
         os.environ.setdefault(key, value)
 
 
