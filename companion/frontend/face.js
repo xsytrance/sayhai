@@ -251,6 +251,8 @@
 
   // gentle "look toward the cursor" bias (desktop nicety; decays away)
   let lookBiasX = 0, lookBiasY = 0, lookBiasUntil = 0;
+  // IMU tilt (the Go): eyes slide with gravity, head leans a touch
+  let motionTiltX = 0, motionTiltY = 0;
 
   // ---------------------------------------------------------------------------
   //  SVG refs
@@ -301,7 +303,7 @@
     const breath = Math.sin(breathPhase) * breathAmp;
 
     // ---- global face transform: tilt + squash/stretch + breathing + micro life
-    let tilt = S.tilt.value + Math.sin(t * 0.5) * 0.8 + Math.sin(t * 0.23) * 0.5;
+    let tilt = S.tilt.value + Math.sin(t * 0.5) * 0.8 + Math.sin(t * 0.23) * 0.5 + motionTiltX * 5;
     let ty = S.ty.value + Math.sin(t * 0.7) * 2;
     if (current === "dizzy") { tilt += Math.sin(t * 6) * 6 + Math.sin(t * 3.3) * 4; ty += Math.sin(t * 5) * 6; }
     const sx = S.sx.value * (1 + breath * 0.5);
@@ -322,8 +324,8 @@
 
     // ---- gaze (both eyes look the same way): pose + saccade + cursor bias + drift
     if (t > lookBiasUntil) { lookBiasX *= 0.94; lookBiasY *= 0.94; }
-    S.gazeX.to(poseGazeX + S.sacX.value + lookBiasX + Math.sin(t * 0.7) * 3);
-    S.gazeY.to(poseGazeY + S.sacY.value + lookBiasY + Math.cos(t * 0.6) * 2);
+    S.gazeX.to(poseGazeX + S.sacX.value + lookBiasX + motionTiltX * 50 + Math.sin(t * 0.7) * 3);
+    S.gazeY.to(poseGazeY + S.sacY.value + lookBiasY + motionTiltY * 45 + Math.cos(t * 0.6) * 2);
     const [gx, gy] = clampGaze(S.gazeX.value, S.gazeY.value);
     const ps = S.pupilScale.value;
     el.gazeL.setAttribute("transform", `translate(${(EYE_L.x + gx).toFixed(1)} ${(EYE_L.y + gy).toFixed(1)}) scale(${ps.toFixed(3)})`);
@@ -766,6 +768,7 @@
       else if (m.type === "stop") stopSpeaking();                            // barge-in from elsewhere
       else if (m.type === "heard" && m.text) showCaption("“" + m.text + "”"); // what it transcribed
       else if (m.type === "reply" && m.text) showReply(m.text);              // his words (subtitle)
+      else if (m.type === "tilt") { motionTiltX = m.x || 0; motionTiltY = m.y || 0; }  // IMU gravity
       else if (m.type === "cosmetics") applyCosmetics(m.items);             // unlocked accessories
       else if (m.type === "levelup") {                                      // celebrate a new level
         const got = (m.unlocked || []).map((u) => u.ability || u.accessory).join(", ");

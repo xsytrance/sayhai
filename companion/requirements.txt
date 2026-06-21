@@ -26,5 +26,6 @@ python-telegram-bot>=21
 #   pip install llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
 # ElevenLabs (cloud voice): pip install elevenlabs
 
-# --- Phase 4 device senses (on the Go) ---
-# winsdk  sounddevice
+# --- Phase 4 device senses (on the Go; opt-in) ---
+# winsdk     # Windows now-playing (SMTC) + the IMU (gyro/accelerometer)
+# psutil     # battery sense (cross-platform)

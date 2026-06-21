@@ -17,7 +17,7 @@ and the animation springiness together.
 - ✅ **Phase 1 — Brain + Voice OUT + Emotion**
 - ✅ **Phase 2 — Ears (Voice IN)**
 - ✅ **Phase 3 — Channels (text it from anywhere)**
-- 🚧 **Phase 4 — Senses (the nervous system)** — bus + clock + weather; music/motion/battery are device senses for the Go
+- ✅ **Phase 4 — Senses (the nervous system)** — bus + clock + weather (cross-platform); music (SMTC) / motion (IMU) / battery wired for the Go
 - ✅ **Phase 5 — The Tamagotchi layer**
 - 🚧 Phase 6 — Voice upgrades (Orpheus wired; ElevenLabs stubbed)
 - ✅ **Phase 7 — The soul polish** *(current — memory, mood drift, mimic)*
@@ -110,8 +110,13 @@ Live now (cross-platform): **clock** (it notices morning/evening/night) and **we
 curl -X POST localhost:8000/api/chattiness -H 'content-type: application/json' -d '{"value":0.7}'
 ```
 
-Music (now-playing + drops), motion (the Go's gyro — pickup/tilt/shake), and battery
-are **device senses** scaffolded for the Legion Go; they plug into the same bus.
+**On the Legion Go** (Windows) three more senses come online automatically — install
+their deps first (`pip install winsdk psutil`):
+- **Music** (`winsdk` SMTC): reacts to track changes and drops song/artist facts.
+- **Motion** (the IMU): **tilt → eyes slide with gravity, shake → dizzy, pickup → "whoa!",
+  set-down → content.** (Heuristic thresholds — tune `_THRESH` in `senses/motion.py` on the
+  device; flip the tilt axis signs if they feel inverted.)
+- **Battery** (`psutil`, cross-platform): plugged in → "snacks!", low → worried.
 
 ### Swap the voice — emotional Orpheus (Phase 6)
 Kokoro is the no-drama default. For a voice that actually **snickers, sighs, and

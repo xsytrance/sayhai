@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import logging
+import sys
 
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse
@@ -25,7 +26,7 @@ from pydantic import BaseModel
 
 from . import brain, config, ears, game as game_mod, memory as memory_mod, mood as mood_mod, voice
 from .channels import telegram_bot
-from .senses import bus as senses_bus, clock, weather
+from .senses import bus as senses_bus, battery, clock, motion, music, weather
 
 log = logging.getLogger("companion")
 
@@ -307,10 +308,14 @@ def _start_senses() -> None:
     )
     _bus.subscribe(_reactor.on_signal)
     _sensehub = senses_bus.SenseHub(_bus)
-    _sensehub.start_source(clock.run)     # time-of-day (cross-platform)
-    _sensehub.start_source(weather.run)   # Open-Meteo (cross-platform)
-    # music/motion/battery are Windows/device senses — wired on the Go later.
-    log.info("senses online (chattiness=%.2f)", config.CHATTINESS)
+    _sensehub.start_source(clock.run)               # time-of-day (cross-platform)
+    _sensehub.start_source(weather.run)             # Open-Meteo (cross-platform)
+    _sensehub.start_source(battery.run)             # psutil; self-skips with no battery
+    if sys.platform.startswith("win"):              # device senses — live on the Go
+        _sensehub.start_source(music.run)           # SMTC now-playing
+        _sensehub.start_source(motion.run, hub.broadcast)  # IMU: tilt/shake/pickup
+    log.info("senses online (chattiness=%.2f, device=%s)",
+             config.CHATTINESS, "win" if sys.platform.startswith("win") else "off")
 
 
 @app.on_event("startup")

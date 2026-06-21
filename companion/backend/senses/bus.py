@@ -92,8 +92,10 @@ class SenseHub:
         self.bus = bus
         self._tasks: list[asyncio.Task] = []
 
-    def start_source(self, run_coro) -> None:
-        self._tasks.append(asyncio.create_task(run_coro(self.bus)))
+    def start_source(self, run_coro, *args) -> None:
+        # sources get the bus; some (motion) also get a broadcaster for fast,
+        # un-gated face reactions (eyes sliding with gravity can't wait on the brain).
+        self._tasks.append(asyncio.create_task(run_coro(self.bus, *args)))
 
     async def stop(self) -> None:
         for t in self._tasks:
