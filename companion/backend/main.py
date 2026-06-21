@@ -23,13 +23,16 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import brain, config, ears, game as game_mod, voice
+from . import brain, config, ears, game as game_mod, memory as memory_mod, mood as mood_mod, voice
 from .channels import telegram_bot
 from .senses import bus as senses_bus, clock, weather
 
 log = logging.getLogger("companion")
 
 _game = game_mod.Game(config.DATA_DIR / "state.json")
+_memory = memory_mod.Memory(config.DATA_DIR / "memory.json")
+_mood = mood_mod.MoodDrift(config.DATA_DIR / "mood.json")
+_mimic = False   # 🦜 mimic mode: parrot the user back instead of thinking
 
 
 class Hub:
@@ -108,6 +111,35 @@ async def start_conversation(text: str, ambient: bool = False) -> dict:
                 "voice_error": None, "cancelled": True}
 
 
+def _compose_context(text: str) -> str:
+    """Everything the brain should know right now: body-state + memory + mood."""
+    parts = [_game.status_line()]
+    mem = _memory.context_for(text)
+    if mem:
+        parts.append(mem)
+    parts.append(_mood.context_line())
+    return "\n".join(parts)
+
+
+async def _mimic_reply(text: str) -> dict:
+    """🦜 Parrot the user's words back in a goofy delivery — no brain involved."""
+    _game.on_interaction()
+    emo = "mischievous"
+    await hub.broadcast({"type": "emotion", "emotion": emo})
+    await hub.broadcast({"type": "reply", "text": text})
+    voice_error, spoke = None, False
+    try:
+        wav = await voice.speak(text, emo)
+        await hub.broadcast({"type": "speak",
+                             "audio": base64.b64encode(wav).decode("ascii"), "mime": "audio/wav"})
+        spoke = True
+    except voice.VoiceUnavailable as e:
+        voice_error = str(e)
+    except Exception as e:
+        voice_error = f"voice error: {e}"
+    return {"emotion": emo, "text": text, "spoke": spoke, "voice_error": voice_error, "mimic": True}
+
+
 async def converse(text: str, remember: bool = True, ambient: bool = False) -> dict:
     """The streaming core (Phase 1), now cancellable for barge-in (Phase 2).
 
@@ -125,12 +157,17 @@ async def converse(text: str, remember: bool = True, ambient: bool = False) -> d
         return {"emotion": "curious", "text": "hm? you didn't say anything.",
                 "spoke": False, "voice_error": None}
 
+    # 🦜 mimic mode: just parrot the user back (peak parrot), no brain.
+    if not ambient and _mimic:
+        return await _mimic_reply(text)
+
     # A real conversation turn is "attention is food": nourish + earn XP, and let
-    # the resulting body-state color the brain's mood. Ambient remarks don't feed.
+    # body-state + memory + mood color the brain. Ambient remarks don't feed/learn.
     status = None
     if not ambient:
+        _memory.extract(text)                 # learn name/facts from this message
         leveled = _game.on_interaction()
-        status = _game.status_line()
+        status = _compose_context(text)
 
     await hub.broadcast({"type": "emotion", "emotion": "thinking"})
     if not ambient and leveled["leveled_up"]:
@@ -348,12 +385,46 @@ async def feed() -> JSONResponse:
     return JSONResponse({"ok": True, **_game.public()})
 
 
+class RememberIn(BaseModel):
+    fact: str
+
+
+class MimicIn(BaseModel):
+    on: bool | None = None
+
+
+@app.get("/api/memory")
+async def get_memory() -> JSONResponse:
+    """What it knows about you: name + remembered facts."""
+    return JSONResponse(_memory.public())
+
+
+@app.post("/api/remember")
+async def remember_fact(body: RememberIn) -> JSONResponse:
+    _memory.add_fact(body.fact)
+    return JSONResponse({"ok": True, **_memory.public()})
+
+
+@app.get("/api/mimic")
+async def get_mimic() -> JSONResponse:
+    return JSONResponse({"mimic": _mimic})
+
+
+@app.post("/api/mimic")
+async def set_mimic(body: MimicIn) -> JSONResponse:
+    """🦜 Toggle mimic mode (no body = flip)."""
+    global _mimic
+    _mimic = (not _mimic) if body.on is None else bool(body.on)
+    return JSONResponse({"mimic": _mimic})
+
+
 async def _game_tick() -> None:
-    """Slowly get hungry / rest up; nudge the senses bus when peckish."""
+    """Slowly get hungry / rest up; drift the baseline mood; nudge the bus when peckish."""
     prev_hungry = _game.hunger < 25
     while True:
         await asyncio.sleep(60)
         _game.tick(1.0)
+        _mood.maybe_drift()
         hungry = _game.hunger < 25
         if hungry and not prev_hungry and _bus is not None:
             await _bus.emit({"kind": "needs", "summary": "you're getting hungry", "weight": 0.8})
@@ -423,6 +494,9 @@ async def diag() -> JSONResponse:
     info["chattiness"] = _reactor.chattiness if _reactor is not None else config.CHATTINESS
     info["level"] = _game.level
     info["hunger"] = round(_game.hunger)
+    info["knows_name"] = _memory.name or None
+    info["mood_drift"] = _mood.mood
+    info["mimic"] = _mimic
     return JSONResponse(info)
 
 

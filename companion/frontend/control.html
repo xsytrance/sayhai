@@ -61,6 +61,7 @@
   <div id="log"></div>
   <form id="form">
     <input id="text" autocomplete="off" placeholder="say something…" autofocus />
+    <button id="mimic" type="button" title="mimic mode (parrots you back)">🦜</button>
     <button id="treat" type="button" title="give a treat">🍪</button>
     <button id="send" type="submit">Send</button>
   </form>
@@ -101,6 +102,16 @@
         refreshGame();
       } catch {}
     });
+    const mimicBtn = document.getElementById("mimic");
+    function setMimic(on) { mimicBtn.style.background = on ? "#ff8aa6" : ""; mimicBtn.style.opacity = on ? "1" : "0.7"; }
+    mimicBtn.addEventListener("click", async () => {
+      try {
+        const j = await (await fetch("/api/mimic", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })).json();
+        setMimic(j.mimic);
+        add("note", j.mimic ? "🦜 mimic mode ON — it'll parrot you" : "mimic mode off");
+      } catch {}
+    });
+    fetch("/api/mimic").then((r) => r.json()).then((j) => setMimic(j.mimic)).catch(() => {});
     refreshGame();
 
     form.addEventListener("submit", async (e) => {

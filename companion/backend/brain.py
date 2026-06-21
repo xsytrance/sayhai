@@ -53,7 +53,7 @@ Example: [mischievous] ohhh you put THAT song on again? bold.
 def _messages(user_text: str, status: str | None = None) -> list[dict]:
     sys = system_prompt()
     if status:
-        sys += "\n\nBODY STATE — " + status
+        sys += "\n\nCONTEXT —\n" + status
     msgs = [{"role": "system", "content": sys}]
     msgs += _history[-(config.HISTORY_TURNS * 2):]
     msgs.append({"role": "user", "content": user_text})

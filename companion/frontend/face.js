@@ -537,6 +537,16 @@
     }
   }
 
+  // 🦜 mimic mode toggle (parrots you back)
+  async function toggleMimic() {
+    try {
+      const j = await (await fetch("/api/mimic", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
+      })).json();
+      showCaption(j.mimic ? "🦜 mimic mode ON" : "mimic mode off");
+    } catch { /* server gone */ }
+  }
+
   function pickMime() {
     const types = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/mp4"];
     if (window.MediaRecorder && MediaRecorder.isTypeSupported) {
@@ -706,6 +716,7 @@
     else if (k === "a") document.querySelector('[data-act="cycle"]').click();
     else if (k === "p") poke();
     else if (k === "f") toggleFullscreen();
+    else if (k === "m") toggleMimic();                         // 🦜 mimic mode
     else if (k === "t") { if (!e.repeat) startListening(); }   // hold to talk
   });
   window.addEventListener("keyup", (e) => { if (e.key.toLowerCase() === "t") stopListening(); });

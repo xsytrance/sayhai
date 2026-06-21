@@ -18,9 +18,9 @@ and the animation springiness together.
 - ✅ **Phase 2 — Ears (Voice IN)**
 - ✅ **Phase 3 — Channels (text it from anywhere)**
 - 🚧 **Phase 4 — Senses (the nervous system)** — bus + clock + weather; music/motion/battery are device senses for the Go
-- ✅ **Phase 5 — The Tamagotchi layer** *(current)*
+- ✅ **Phase 5 — The Tamagotchi layer**
 - 🚧 Phase 6 — Voice upgrades (Orpheus wired; ElevenLabs stubbed)
-- ⬜ Phase 7 — The soul polish
+- ✅ **Phase 7 — The soul polish** *(current — memory, mood drift, mimic)*
 
 ---
 
@@ -140,6 +140,16 @@ and clipped; freshly fed or just leveled up, it's bouncy and generous.
   live stats bar; `GET /api/game` has the full state.
 
 Gentle by design: neglect makes it sleepy/wistful, never guilt-trippy.
+
+### The soul (Phase 7)
+- **Memory** (`data/memory.json`): tell it *"my name is Sam"* or *"remember that I hate
+  mondays"* and it keeps it, recalling the relevant bits in later chats. `GET /api/memory`,
+  `POST /api/remember`.
+- **Mood drift**: a slow baseline temperament (chipper/chaotic/broody/…) that shifts every
+  few hours and subtly tints everything — internal weather, separate from the per-reply
+  emotion. (See `mood_drift` in `/api/diag`.)
+- **Mimic mode** 🦜: press **`M`** on the face (or the 🦜 button on `/control`) and it
+  parrots whatever you say back in a goofy voice. Peak parrot.
 
 ## Troubleshooting
 
