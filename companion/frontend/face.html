@@ -151,8 +151,19 @@
         <button data-act="fullscreen">fullscreen <kbd>f</kbd></button>
       </div>
       <div id="status">emotion: <b id="curEmo">neutral</b> · <span id="curProfile">normal</span></div>
-      <div id="hint">keys 1–9 0 - = pick emotion · space = next · ` = panel</div>
+      <div id="hint">keys 1–9 0 - = pick emotion · space = next · ` = panel · hold T / mic = talk</div>
     </div>
+
+    <!-- transient caption: "listening…" / "you: …" -->
+    <div id="caption"></div>
+
+    <!-- hold-to-talk: touch the Go's screen, or map a back button to T -->
+    <button id="mic" title="hold to talk (T)" aria-label="hold to talk">
+      <svg viewBox="0 0 24 24" width="34" height="34" aria-hidden="true">
+        <path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3z"/>
+        <path d="M19 11a7 7 0 0 1-14 0M12 18v3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+    </button>
   </div>
 
   <script src="/face.js"></script>

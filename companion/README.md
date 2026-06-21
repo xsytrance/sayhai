@@ -14,8 +14,8 @@ and the animation springiness together.
 ## Status
 
 - ✅ **Phase 0 — Scaffold + the alive face**
-- ✅ **Phase 1 — Brain + Voice OUT + Emotion** *(current)*
-- ⬜ Phase 2 — Ears (Voice IN)
+- ✅ **Phase 1 — Brain + Voice OUT + Emotion**
+- ✅ **Phase 2 — Ears (Voice IN)** *(current)*
 - ⬜ Phase 3 — Channels (text it from anywhere)
 - ⬜ Phase 4 — Senses (the nervous system)
 - ⬜ Phase 5 — The Tamagotchi layer
@@ -68,6 +68,20 @@ You can also drive it from a terminal:
 ```bash
 curl -X POST localhost:8000/api/say -H 'content-type: application/json' -d '{"text":"hey, what song is this?"}'
 ```
+
+### 5. Talk to it out loud (Phase 2 — voice in)
+On the **face** window (served at `localhost`, so the mic is allowed): **hold the mic
+button** (touch the Go's screen) or **hold `T`**, talk, release. It transcribes with
+faster-whisper (`base.en`, auto-downloads ~150MB on first use), thinks, and replies by
+voice — a full local loop, zero cloud, zero tokens. Map a Legion Go back button to `T`
+for a physical push-to-talk.
+
+**Barge-in:** start talking (press the mic / `T`) while Chatty is mid-sentence and it
+**shuts up and listens** — the in-flight reply is cancelled, not just muted.
+
+> Mic needs a secure context, so voice-in works on the Go at `localhost` (and over
+> https), but **not** from a phone over plain `http://<lan-ip>` — that's text-only until
+> Phase 3 adds proper channels.
 
 ## Play with the face (Phase 0 controls)
 

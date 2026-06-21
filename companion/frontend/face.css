@@ -164,3 +164,60 @@ kbd {
 #status { color: #aebbdd; margin: 2px 0 6px; }
 #status b { color: var(--accent); text-transform: capitalize; }
 #hint { color: #6f7da6; font-size: 10.5px; line-height: 1.4; }
+
+/* CAPTION (listening / heard) ----------------------------------------- */
+#caption {
+  position: fixed;
+  left: 50%;
+  bottom: 132px;
+  transform: translateX(-50%) translateY(8px);
+  max-width: 80vw;
+  padding: 10px 18px;
+  border-radius: 16px;
+  background: rgba(12, 12, 26, 0.78);
+  border: 1px solid rgba(120, 200, 255, 0.18);
+  color: #eaf1ff;
+  font-size: clamp(15px, 2.6vw, 22px);
+  text-align: center;
+  backdrop-filter: blur(8px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.22s ease, transform 0.22s ease;
+  z-index: 9;
+}
+#caption.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+#caption.listening { border-color: var(--accent); color: var(--accent); }
+
+/* MIC BUTTON (hold to talk) ------------------------------------------- */
+#mic {
+  position: fixed;
+  left: 50%;
+  bottom: 34px;
+  transform: translateX(-50%);
+  width: 76px; height: 76px;
+  border-radius: 50%;
+  border: 2px solid rgba(120, 200, 255, 0.35);
+  background: rgba(18, 18, 38, 0.7);
+  color: #cfe0ff;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+  touch-action: none;          /* we handle press/hold ourselves */
+  z-index: 9;
+  transition: transform 0.08s ease, background 0.15s ease, border-color 0.15s ease;
+}
+#mic:active { transform: translateX(-50%) scale(0.92); }
+#mic.recording {
+  background: rgba(255, 70, 90, 0.22);
+  border-color: #ff5d6c;
+  color: #ffd2d8;
+  animation: micpulse 1s ease-in-out infinite;
+}
+@keyframes micpulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 93, 108, 0.5); }
+  50%      { box-shadow: 0 0 0 14px rgba(255, 93, 108, 0); }
+}
+#mic path[fill="none"] { stroke: currentColor; }
+#mic path:not([fill="none"]) { fill: currentColor; }

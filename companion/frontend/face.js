@@ -419,9 +419,10 @@
   // ---------------------------------------------------------------------------
   const LIP_GAIN = 170;                 // how far the mouth opens at full volume
   // pending = audio buffers still to finish; nextStart schedules chunks back-to-back
-  // for gapless streamed playback; chain serializes decode so chunks never swap order.
+  // for gapless streamed playback; chain serializes decode so chunks never swap order;
+  // sources + epoch let barge-in stop everything (incl. chunks still decoding).
   const lip = { ctx: null, analyser: null, data: null, speaking: false, amp: 0,
-                pending: 0, nextStart: 0, chain: Promise.resolve() };
+                pending: 0, nextStart: 0, chain: Promise.resolve(), sources: [], epoch: 0 };
 
   function ensureAudio() {
     if (lip.ctx) return lip.ctx;
@@ -447,10 +448,13 @@
   function enqueueAudio(b64) {
     const ctx = ensureAudio();
     if (!ctx) return;
+    const epoch = lip.epoch;
     lip.chain = lip.chain.then(async () => {
+      if (epoch !== lip.epoch) return;        // barged-in before our turn
       if (ctx.state === "suspended") { try { await ctx.resume(); } catch { /* needs a gesture */ } }
       let buf;
       try { buf = await ctx.decodeAudioData(b64ToBuf(b64)); } catch { return; }
+      if (epoch !== lip.epoch) return;        // barged-in while decoding
       const src = ctx.createBufferSource();
       src.buffer = buf;
       src.connect(lip.analyser);
@@ -459,8 +463,23 @@
       lip.nextStart = startAt + buf.duration;
       lip.pending++;
       lip.speaking = true;
-      src.onended = () => { if (--lip.pending <= 0) { lip.pending = 0; lip.speaking = false; } };
+      lip.sources.push(src);
+      src.onended = () => {
+        const i = lip.sources.indexOf(src);
+        if (i >= 0) lip.sources.splice(i, 1);
+        if (--lip.pending <= 0) { lip.pending = 0; lip.speaking = false; }
+      };
     }).catch(() => {});
+  }
+
+  // Barge-in: stop talking immediately and invalidate any queued/decoding chunks.
+  function stopSpeaking() {
+    lip.epoch++;
+    for (const s of lip.sources) { try { s.stop(); } catch { /* already done */ } }
+    lip.sources = [];
+    lip.pending = 0;
+    lip.speaking = false;
+    lip.nextStart = 0;
   }
   function updateLip() {
     let target = 0;
@@ -472,6 +491,72 @@
     }
     // snappier to open than to close, so flaps read crisp
     lip.amp += (target - lip.amp) * (target > lip.amp ? 0.6 : 0.2);
+  }
+
+  // ---------------------------------------------------------------------------
+  //  Voice IN — push-to-talk. Hold the mic button (or T): record, release to
+  //  send. Starting to talk barges in (stops Chatty mid-sentence). Capture is in
+  //  the browser; faster-whisper transcribes on the backend.
+  // ---------------------------------------------------------------------------
+  const rec = { media: null, chunks: [], stream: null, active: false };
+  let captionTimer = null;
+
+  function showCaption(text, listening) {
+    const c = $("caption");
+    if (!c) return;
+    c.textContent = text;
+    c.classList.toggle("listening", !!listening);
+    c.classList.add("show");
+    clearTimeout(captionTimer);
+    if (!listening) captionTimer = setTimeout(() => c.classList.remove("show"), 3200);
+  }
+  function hideCaption() {
+    const c = $("caption");
+    if (c) { clearTimeout(captionTimer); c.classList.remove("show"); }
+  }
+
+  async function startListening() {
+    if (rec.active) return;
+    ensureAudio(); resumeAudio();
+    stopSpeaking();                              // barge-in: hush mid-sentence
+    if (!navigator.mediaDevices || !window.MediaRecorder) { showCaption("no mic here"); return; }
+    let stream;
+    try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+    catch { showCaption("mic blocked (needs localhost or https)"); return; }
+    rec.stream = stream; rec.chunks = [];
+    try { rec.media = new MediaRecorder(stream); }
+    catch { stream.getTracks().forEach((t) => t.stop()); showCaption("recording unsupported"); return; }
+    rec.media.ondataavailable = (e) => { if (e.data && e.data.size) rec.chunks.push(e.data); };
+    rec.media.onstop = () => {
+      const blob = new Blob(rec.chunks, { type: rec.media.mimeType || "audio/webm" });
+      if (rec.stream) { rec.stream.getTracks().forEach((t) => t.stop()); rec.stream = null; }
+      sendAudio(blob);
+    };
+    rec.media.start();
+    rec.active = true;
+    $("mic") && $("mic").classList.add("recording");
+    showCaption("listening…", true);
+  }
+  function stopListening() {
+    if (!rec.active) return;
+    rec.active = false;
+    $("mic") && $("mic").classList.remove("recording");
+    showCaption("…", true);
+    try { rec.media.stop(); } catch { hideCaption(); }
+  }
+  async function sendAudio(blob) {
+    if (!blob || blob.size < 1200) { hideCaption(); return; }   // too short = nothing said
+    showCaption("…thinking", true);
+    try {
+      const r = await fetch("/api/listen", {
+        method: "POST",
+        headers: { "Content-Type": blob.type || "application/octet-stream" },
+        body: blob,
+      });
+      const j = await r.json();
+      if (j && j.transcript) showCaption("“" + j.transcript + "”");
+      else hideCaption();                       // heard nothing usable
+    } catch { showCaption("couldn't reach the brain"); }
   }
 
   // ---------------------------------------------------------------------------
@@ -562,7 +647,9 @@
     else if (k === "a") document.querySelector('[data-act="cycle"]').click();
     else if (k === "p") poke();
     else if (k === "f") toggleFullscreen();
+    else if (k === "t") { if (!e.repeat) startListening(); }   // hold to talk
   });
+  window.addEventListener("keyup", (e) => { if (e.key.toLowerCase() === "t") stopListening(); });
 
   // cursor-follow + poke on the face
   const svg = $("svg");
@@ -578,6 +665,17 @@
   window.addEventListener("pointerdown", unlock, { once: true });
   window.addEventListener("keydown", unlock, { once: true });
 
+  // hold-to-talk mic button (touch / mouse)
+  const micBtn = $("mic");
+  if (micBtn) {
+    const down = (e) => { e.preventDefault(); startListening(); };
+    const up = (e) => { e.preventDefault(); stopListening(); };
+    micBtn.addEventListener("pointerdown", down);
+    micBtn.addEventListener("pointerup", up);
+    micBtn.addEventListener("pointerleave", up);
+    micBtn.addEventListener("pointercancel", up);
+  }
+
   // ---------------------------------------------------------------------------
   //  WebSocket — the nerve the brain/senses will push emotions down later.
   // ---------------------------------------------------------------------------
@@ -592,6 +690,8 @@
       let m; try { m = JSON.parse(ev.data); } catch { return; }
       if (m.type === "emotion" && POSES[m.emotion]) applyPose(m.emotion);
       else if (m.type === "speak") { if (m.audio) enqueueAudio(m.audio); }   // streamed chunk
+      else if (m.type === "stop") stopSpeaking();                            // barge-in from elsewhere
+      else if (m.type === "heard" && m.text) showCaption("“" + m.text + "”"); // what it transcribed
       else if (m.type === "say") {                                           // non-stream fallback
         if (POSES[m.emotion]) applyPose(m.emotion);
         if (m.audio) enqueueAudio(m.audio);

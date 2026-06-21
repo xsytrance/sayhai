@@ -104,6 +104,16 @@ KOKORO_LANG = _get("KOKORO_LANG", "en-us")
 ELEVENLABS_API_KEY = _get("ELEVENLABS_API_KEY", "")
 
 # ---------------------------------------------------------------------------
+# Ears — Phase 2 (faster-whisper STT). Browser captures the mic; we transcribe.
+# ---------------------------------------------------------------------------
+# base.en is fast + accurate enough for short push-to-talk clips. Try small.en
+# for more accuracy, tiny.en for more speed. int8 keeps it snappy on CPU.
+STT_MODEL = _get("STT_MODEL", "base.en")
+STT_DEVICE = _get("STT_DEVICE", "cpu")
+STT_COMPUTE = _get("STT_COMPUTE", "int8")
+STT_LANG = _get("STT_LANG", "en")  # blank to auto-detect (slower)
+
+# ---------------------------------------------------------------------------
 # Channels — Phase 3 (declared early, unused until then)
 # ---------------------------------------------------------------------------
 TELEGRAM_TOKEN = _get("TELEGRAM_TOKEN", "")

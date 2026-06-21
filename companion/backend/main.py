@@ -18,12 +18,12 @@ import asyncio
 import base64
 import logging
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import brain, config, voice
+from . import brain, config, ears, voice
 
 log = logging.getLogger("companion")
 
@@ -72,61 +72,84 @@ hub = Hub()
 app = FastAPI(title=f"{config.CREATURE_NAME} — companion")
 
 # Serialize conversations so replies (and their audio) never overlap on the face.
-_speak_lock = asyncio.Lock()
+# Only one conversation runs at a time; a new one cancels the current (barge-in).
+_current_convo: "asyncio.Task | None" = None
+
+
+async def start_conversation(text: str) -> dict:
+    """Run a turn, cancelling any in-flight one first (barge-in).
+
+    Every input path (typed, phone, voice) goes through here. When you interrupt,
+    the previous reply stops generating + speaking and the faces are told to hush.
+    """
+    global _current_convo
+    prev = _current_convo
+    if prev is not None and not prev.done():
+        prev.cancel()
+        try:
+            await prev
+        except asyncio.CancelledError:
+            pass
+    task = asyncio.create_task(converse(text))
+    _current_convo = task
+    try:
+        return await task
+    except asyncio.CancelledError:
+        return {"emotion": None, "text": "", "spoke": False,
+                "voice_error": None, "cancelled": True}
 
 
 async def converse(text: str) -> dict:
-    """The Phase 1 core, streamed for a near-real-time feel.
+    """The streaming core (Phase 1), now cancellable for barge-in (Phase 2).
 
     1. Push ``thinking`` immediately.
-    2. Stream tokens from the brain. The reply begins with ``[emotion]`` — the
-       moment we parse it we push the pose (no waiting for the whole reply).
-    3. As complete clauses/sentences arrive, hand them to the voice and stream the
-       audio chunks to the face, which queues and plays them gaplessly while the
-       model is still generating the rest.
+    2. Stream tokens from the brain; the reply begins with ``[emotion]`` so we
+       pop the pose on the first token (no waiting for the whole reply).
+    3. Hand complete clauses to the voice and stream audio chunks to the face,
+       which plays them gaplessly while the model is still generating.
 
-    A worker consumes a queue so synthesis overlaps generation; chunks stay in
-    order. Voice failures degrade gracefully (face + pose, just silent).
+    If cancelled (you started talking), we stop generating + synthesizing and
+    broadcast ``stop`` so the faces go quiet.
     """
     text = (text or "").strip()
     if not text:
         return {"emotion": "curious", "text": "hm? you didn't say anything.",
                 "spoke": False, "voice_error": None}
 
-    async with _speak_lock:
-        await hub.broadcast({"type": "emotion", "emotion": "thinking"})
+    await hub.broadcast({"type": "emotion", "emotion": "thinking"})
 
-        q: asyncio.Queue = asyncio.Queue()
-        state = {"voice_error": None}
+    q: asyncio.Queue = asyncio.Queue()
+    state = {"voice_error": None}
 
-        async def consumer() -> None:
-            while True:
-                item = await q.get()
-                if item is None:
-                    return
-                sentence, emo = item
-                if state["voice_error"]:
-                    continue  # voice known-bad; drain the rest quietly
-                try:
-                    wav = await voice.speak(sentence, emo)
-                    await hub.broadcast({
-                        "type": "speak",
-                        "audio": base64.b64encode(wav).decode("ascii"),
-                        "mime": "audio/wav",
-                    })
-                except voice.VoiceUnavailable as e:
-                    state["voice_error"] = str(e)
-                    log.warning("voice unavailable — speaking silently: %s", e)
-                except Exception as e:  # never let TTS take down the reply
-                    state["voice_error"] = f"voice error: {e}"
-                    log.exception("voice synthesis failed")
+    async def consumer() -> None:
+        while True:
+            item = await q.get()
+            if item is None:
+                return
+            sentence, emo = item
+            if state["voice_error"]:
+                continue  # voice known-bad; drain the rest quietly
+            try:
+                wav = await voice.speak(sentence, emo)
+                await hub.broadcast({
+                    "type": "speak",
+                    "audio": base64.b64encode(wav).decode("ascii"),
+                    "mime": "audio/wav",
+                })
+            except voice.VoiceUnavailable as e:
+                state["voice_error"] = str(e)
+                log.warning("voice unavailable — speaking silently: %s", e)
+            except Exception as e:  # never let TTS take down the reply
+                state["voice_error"] = f"voice error: {e}"
+                log.exception("voice synthesis failed")
 
-        consumer_task = asyncio.create_task(consumer())
+    consumer_task = asyncio.create_task(consumer())
 
-        emotion: str | None = None
-        buf = ""
-        parts: list[str] = []
-        first_chunk = True
+    emotion: "str | None" = None
+    buf = ""
+    parts: list[str] = []
+    first_chunk = True
+    try:
         try:
             async for delta in brain.stream_tokens(text):
                 buf += delta
@@ -153,7 +176,7 @@ async def converse(text: str) -> dict:
                         parts.append(chunk)
                         await q.put((chunk, emotion))
                         first_chunk = False
-        except Exception:
+        except Exception:  # brain/transport failure (NOT cancellation)
             log.exception("brain stream failed")
             if emotion is None:
                 emotion = "dizzy"
@@ -182,13 +205,23 @@ async def converse(text: str) -> dict:
             "spoke": state["voice_error"] is None and bool(full),
             "voice_error": state["voice_error"],
         }
+    except asyncio.CancelledError:
+        await hub.broadcast({"type": "stop"})   # barge-in: tell faces to hush
+        raise
+    finally:
+        if not consumer_task.done():
+            consumer_task.cancel()
 
 
 async def _warmup() -> None:
-    """Load the model + voice into memory so the first real turn is snappy."""
+    """Pre-load brain + voice + ears so the first interaction isn't a cold start."""
     await brain.warmup()
     try:
         await voice.speak("ready", "neutral")  # forces Kokoro to load its ONNX
+    except Exception:
+        pass
+    try:
+        await asyncio.to_thread(ears.warmup)   # loads the faster-whisper model
     except Exception:
         pass
 
@@ -252,9 +285,32 @@ async def control_page() -> FileResponse:
 
 @app.post("/api/say")
 async def api_say(body: SayIn) -> JSONResponse:
-    """Message the creature. It thinks, replies out loud on the face, and we
-    return the reply text so the sender (phone page) can show it too."""
-    return JSONResponse(await converse(body.text))
+    """Message the creature by text. It thinks, replies out loud on the face, and
+    we return the reply so the sender (phone page) can show it too."""
+    return JSONResponse(await start_conversation(body.text))
+
+
+@app.post("/api/listen")
+async def api_listen(request: Request) -> JSONResponse:
+    """Voice IN: the browser POSTs a recorded clip; we transcribe it and run the
+    same conversation. Returns the transcript (+ the reply, which also streams to
+    the face over the WebSocket)."""
+    audio = await request.body()
+    if not audio:
+        return JSONResponse({"ok": False, "error": "no audio"}, status_code=400)
+    try:
+        text = (await ears.transcribe(audio)).strip()
+    except ears.EarsUnavailable as e:
+        log.warning("ears unavailable: %s", e)
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=503)
+    except Exception as e:
+        log.exception("transcription failed")
+        return JSONResponse({"ok": False, "error": f"stt error: {e}"}, status_code=500)
+    if not text:
+        return JSONResponse({"ok": True, "transcript": "", "heard": False})
+    await hub.broadcast({"type": "heard", "text": text})   # show what it heard
+    reply = await start_conversation(text)
+    return JSONResponse({"ok": True, "transcript": text, "heard": True, **reply})
 
 
 @app.websocket("/ws")
@@ -281,7 +337,7 @@ async def ws_endpoint(ws: WebSocket) -> None:
                 text = data.get("text", "")
                 if isinstance(text, str) and text.strip():
                     # don't block this socket's read loop while generating
-                    asyncio.create_task(converse(text))
+                    asyncio.create_task(start_conversation(text))
     except WebSocketDisconnect:
         pass
     except Exception:
