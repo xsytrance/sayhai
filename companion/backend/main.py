@@ -25,6 +25,7 @@ from pydantic import BaseModel
 
 from . import brain, config, ears, voice
 from .channels import telegram_bot
+from .senses import bus as senses_bus, clock, weather
 
 log = logging.getLogger("companion")
 
@@ -75,15 +76,20 @@ app = FastAPI(title=f"{config.CREATURE_NAME} — companion")
 # Serialize conversations so replies (and their audio) never overlap on the face.
 # Only one conversation runs at a time; a new one cancels the current (barge-in).
 _current_convo: "asyncio.Task | None" = None
+_reactor = None  # senses Reactor (Phase 4), set on startup
 
 
-async def start_conversation(text: str) -> dict:
+async def start_conversation(text: str, ambient: bool = False) -> dict:
     """Run a turn, cancelling any in-flight one first (barge-in).
 
-    Every input path (typed, phone, voice) goes through here. When you interrupt,
-    the previous reply stops generating + speaking and the faces are told to hush.
+    Every input path goes through here. ``ambient=True`` is a spontaneous remark
+    from the senses — it doesn't count as user activity and isn't remembered as a
+    conversation turn. When you interrupt, the previous reply stops generating +
+    speaking and the faces are told to hush.
     """
     global _current_convo
+    if not ambient and _reactor is not None:
+        _reactor.mark_user_activity()
     prev = _current_convo
     if prev is not None and not prev.done():
         prev.cancel()
@@ -91,7 +97,7 @@ async def start_conversation(text: str) -> dict:
             await prev
         except asyncio.CancelledError:
             pass
-    task = asyncio.create_task(converse(text))
+    task = asyncio.create_task(converse(text, remember=not ambient))
     _current_convo = task
     try:
         return await task
@@ -100,7 +106,7 @@ async def start_conversation(text: str) -> dict:
                 "voice_error": None, "cancelled": True}
 
 
-async def converse(text: str) -> dict:
+async def converse(text: str, remember: bool = True) -> dict:
     """The streaming core (Phase 1), now cancellable for barge-in (Phase 2).
 
     1. Push ``thinking`` immediately.
@@ -198,7 +204,7 @@ async def converse(text: str) -> dict:
         await consumer_task
 
         full = " ".join(p for p in parts if p).strip()
-        if full:
+        if full and remember:
             brain.remember(text, full)
         return {
             "emotion": emotion,
@@ -227,7 +233,31 @@ async def _warmup() -> None:
         pass
 
 
-_tg_app = None  # the running Telegram Application, if any
+_tg_app = None       # the running Telegram Application, if any
+_bus = None          # the senses event bus
+_sensehub = None     # owns the sense source tasks
+
+
+async def _ambient_remark(summary: str) -> None:
+    """The reactor's voice: notice something and maybe say a quip about it."""
+    prompt = f"(you notice: {summary} — react in a word or two if you feel like it, or just vibe)"
+    await start_conversation(prompt, ambient=True)
+
+
+def _start_senses() -> None:
+    global _bus, _sensehub, _reactor
+    _bus = senses_bus.Bus()
+    _reactor = senses_bus.Reactor(
+        _ambient_remark,
+        chattiness=config.CHATTINESS,
+        busy_check=lambda: _current_convo is not None and not _current_convo.done(),
+    )
+    _bus.subscribe(_reactor.on_signal)
+    _sensehub = senses_bus.SenseHub(_bus)
+    _sensehub.start_source(clock.run)     # time-of-day (cross-platform)
+    _sensehub.start_source(weather.run)   # Open-Meteo (cross-platform)
+    # music/motion/battery are Windows/device senses — wired on the Go later.
+    log.info("senses online (chattiness=%.2f)", config.CHATTINESS)
 
 
 @app.on_event("startup")
@@ -240,6 +270,11 @@ async def _on_startup() -> None:
             _tg_app = await telegram_bot.start(start_conversation)
         except Exception:
             log.exception("Telegram channel failed to start")
+    if config.SENSES_ENABLED:
+        try:
+            _start_senses()
+        except Exception:
+            log.exception("senses failed to start")
 
 
 @app.on_event("shutdown")
@@ -248,6 +283,28 @@ async def _on_shutdown() -> None:
     if _tg_app is not None:
         await telegram_bot.stop(_tg_app)
         _tg_app = None
+    if _sensehub is not None:
+        await _sensehub.stop()
+
+
+class ChattinessIn(BaseModel):
+    value: float
+
+
+@app.get("/api/chattiness")
+async def get_chattiness() -> JSONResponse:
+    val = _reactor.chattiness if _reactor is not None else config.CHATTINESS
+    return JSONResponse({"chattiness": val})
+
+
+@app.post("/api/chattiness")
+async def set_chattiness(body: ChattinessIn) -> JSONResponse:
+    """The global chattiness dial: 0 = never pipes up, 1 = chatty."""
+    val = max(0.0, min(1.0, body.value))
+    config.CHATTINESS = val
+    if _reactor is not None:
+        _reactor.chattiness = val
+    return JSONResponse({"chattiness": val})
 
 
 class SayIn(BaseModel):
@@ -304,6 +361,8 @@ async def diag() -> JSONResponse:
         info["faster_whisper"] = "MISSING — pip install faster-whisper"
     info["ffmpeg"] = bool(shutil.which("ffmpeg"))   # for Telegram voice notes
     info["telegram"] = "on" if config.TELEGRAM_TOKEN else "off"
+    info["senses"] = "on" if config.SENSES_ENABLED else "off"
+    info["chattiness"] = _reactor.chattiness if _reactor is not None else config.CHATTINESS
     return JSONResponse(info)
 
 

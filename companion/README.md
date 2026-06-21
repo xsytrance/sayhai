@@ -16,8 +16,8 @@ and the animation springiness together.
 - ✅ **Phase 0 — Scaffold + the alive face**
 - ✅ **Phase 1 — Brain + Voice OUT + Emotion**
 - ✅ **Phase 2 — Ears (Voice IN)**
-- ✅ **Phase 3 — Channels (text it from anywhere)** *(current)*
-- ⬜ Phase 4 — Senses (the nervous system)
+- ✅ **Phase 3 — Channels (text it from anywhere)**
+- 🚧 **Phase 4 — Senses (the nervous system)** *(current — bus + clock + weather; music/motion/battery are device senses for the Go)*
 - ⬜ Phase 5 — The Tamagotchi layer
 - ⬜ Phase 6 — Voice upgrades (Orpheus / ElevenLabs)
 - ⬜ Phase 7 — The soul polish
@@ -95,6 +95,23 @@ exposed on your network (Telegram relays it).
    (`TELEGRAM_VOICE=true`).
 
 The bot starts automatically when a token is present and is silent otherwise.
+
+### 7. It reacts on its own (Phase 4 — senses)
+Everything Chatty senses is a **signal on a shared event bus** (its nervous system).
+A **reactor** decides whether a signal is worth squawking about — tastefully, gated by
+a **chattiness dial**, a cooldown, and "don't butt in right after you / while talking."
+
+Live now (cross-platform): **clock** (it notices morning/evening/night) and **weather**
+(Open-Meteo — comments on conditions, reacts when rain starts/stops). Set `WEATHER_LAT`/
+`WEATHER_LON` in `.env` or let it auto-detect by IP.
+
+```bash
+# turn the dial (0 = never pipes up, 1 = chatty); also in .env as CHATTINESS
+curl -X POST localhost:8000/api/chattiness -H 'content-type: application/json' -d '{"value":0.7}'
+```
+
+Music (now-playing + drops), motion (the Go's gyro — pickup/tilt/shake), and battery
+are **device senses** scaffolded for the Legion Go; they plug into the same bus.
 
 ## Troubleshooting
 

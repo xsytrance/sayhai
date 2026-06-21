@@ -55,6 +55,16 @@ def _get(key: str, default: str) -> str:
     return os.environ.get(key, default)
 
 
+def _opt_float(key: str):
+    v = _get(key, "").strip()
+    if not v:
+        return None
+    try:
+        return float(v)
+    except ValueError:
+        return None
+
+
 # ---------------------------------------------------------------------------
 # Identity
 # ---------------------------------------------------------------------------
@@ -130,6 +140,17 @@ TELEGRAM_TOKEN = _get("TELEGRAM_TOKEN", "")
 TELEGRAM_VOICE = _get("TELEGRAM_VOICE", "true").lower() in ("1", "true", "yes", "on")
 # Lock the bot to specific Telegram user IDs (comma-separated). Blank = anyone.
 TELEGRAM_ALLOWED_IDS = [s.strip() for s in _get("TELEGRAM_ALLOWED_IDS", "").split(",") if s.strip()]
+
+# ---------------------------------------------------------------------------
+# Senses — Phase 4 (the nervous system)
+# ---------------------------------------------------------------------------
+SENSES_ENABLED = _get("SENSES_ENABLED", "true").lower() in ("1", "true", "yes", "on")
+# How often it pipes up unprompted: 0 = never, 1 = chatty. The reactor also
+# rate-limits and waits for quiet, so even 1.0 isn't spammy.
+CHATTINESS = float(_get("CHATTINESS", "0.5"))
+# Location for weather. Blank = auto-detect once by IP. (e.g. 40.71 / -74.0)
+WEATHER_LAT = _opt_float("WEATHER_LAT")
+WEATHER_LON = _opt_float("WEATHER_LON")
 
 
 def resolve_path(p: str) -> Path:
