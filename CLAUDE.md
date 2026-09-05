@@ -1,6 +1,6 @@
 # Working agreement — sayhai
 
-<!-- CANON:BEGIN v2 2026-08-09 — managed by the Singularity Event. Edit the source, not this block. -->
+<!-- CANON:BEGIN v4 2026-08-24 — managed by the Singularity Event. Edit the source, not this block. -->
 ## The Dominion — standing canon (v2)
 
 **Theme.** Everything in this fleet is named and spoken in the register of
@@ -21,7 +21,7 @@ Core terms: fleet → **the Dominion** · owner → **the Sovereign** · host �
 **the Ley Lines** · service → **Engine** · agent → **Champion** · port →
 **Portal** · endpoint → **Gate** · code → **Spell** · function → **Incantation**
 · database → **Vault** · config → **Ward** · secret → **Seal** · doc → **Tome**
-· log/receipt → **Chronicle** · backup → **Wardstone** · monitor → **the Augury**
+· log/receipt → **Chronicle** · backup → **Wardstone** · monitor → **the Proving** · the LED board → **the Scrying Glass**
 · LLM → **Familiar** · notification → **a Sending** · Singularity → **the Grand
 Archive**. *(Top names blessed by the Sovereign 2026-08-07.)*
 
@@ -36,6 +36,16 @@ the horn (notify now) · Muster (roster+liveness) · Hold the line (observe only
 equivalent, offer once per term per session: 📜 Tongue: "<plain>" → **<blessed>**
 — never blocking the work. Anyone coins (`status: "proposed"`); only the
 Sovereign blesses.
+
+**Plain Speech (Article XVI, decreed 2026-08-24).** **The Sovereign must never
+have to decode what his own estate is telling him.** Lead with the verdict (`ALL
+WELL` / `1 THING NEEDS YOU`) — he must be able to stop reading there. Plain words:
+*organs, achieving, unproven, drift, petitions* are our vocabulary, not his. Say
+what a fact MEANS and what to DO. Give every number a scale (`13 of 57`, never
+`13`). **The theme may decorate; it may never obscure** — the twin of the Iron
+Rule. If he has to ask what a message meant, the message failed, and the fault is
+the speaker's. Born when he read a technically perfect Reveille and said *"not
+sure how to interpret this."*
 
 **Reporting.** Every substantive reply ends with a `## TL;DR` — last, after the
 detail, 3–5 bullets. Lead with anything the Sovereign must act on. Corrections
@@ -61,8 +71,8 @@ Eye config if it has a UI. *A system not in the registry does not exist.* Cold
 for 60 days → `~/archive/`. Archiving is honorable; drift is not.
 <!-- CANON:END -->
 
-<!-- BULLETIN:BEGIN 2026-08-09T05:34 — managed by the Singularity Event. Facts, not rules. Edit the registry, not this block. -->
-## The Dominion — the roster (41 systems)
+<!-- BULLETIN:BEGIN 2026-08-24T17:44 — managed by the Singularity Event. Facts, not rules. Edit the registry, not this block. -->
+## The Dominion — the roster (42 systems)
 
 You are in **sayhai**. satellite — needs a purpose line (Sovereign's pass).
 
@@ -70,17 +80,10 @@ You are in **sayhai**. satellite — needs a purpose line (Sovereign's pass).
 **Find out what you missed:** `~/singularity/scripts/brief.sh`
 
 ### Born or changed in the last 14 days
-- **planet-studio** — 2026-08-08 — satellite (music) — Android studio companion for x1c7.com: the Wall, galaxy, cover studio…
-- **audiex** (the Warhorn) — 2026-08-08 — satellite (music) — standalone offline-first player for the Suno catalog; the planet-studio…
-- **stem-racer** — 2026-08-07 — satellite (music/game) — stem-based racing game; APK served from ~/apk-share.
-- **cadence** — 2026-08-07 — the Dominion's ceremony bus (Portal 8114). Any Engine posts a rite; it decides how it is felt…
-- **vgclan** — 2026-08-02 — satellite — VG Clan revival site; re-recruit the founders, deploy to vgclan.x1c7.com.
-- **NEXUS** — 2026-07-31 — command vault (obsidian) — Gradle project with mobile-web application components.
-- **memguard** — 2026-07-31 — utility — guards against memory exhaustion on Prime; the GPU is shared (16 GB) and a runaway…
-- **singularity** (the Grand Archive) — 2026-07-31 — the Grand Archive. System of record for a life: every chat, doc, photo and receipt, dated…
+- **sensorium** — 2026-08-11 — the Sovereign talks to the estate by voice, it answers in a soul, and it sees the chair.…
 
 ### The full roster
-`sayhai` · `stem-racer` · `va-academy` · `vgclan` · `cadence` · `entangled-private` · `entangled-tools` · `xsyverse` · `fft-psx-vera` · `hermes360-c2-artifacts` · `argus-risk-adviser` · `clawdpad-app` · `aurex16pp` · `ember-lite` · `kinetica` · `planet-studio` · `audiex` · `vAIb` · `pokepad` · `ossicle-backups` · `Hermes` · `ossicle` · `singularity-integration` · `x1c7.com` · `AGENOR-Horology` · `atlas` · `entangled` · `undertale-vera` · `eye-of-thundera` · `hermes360` · `xsywatch` · `NEXUS` · `memguard` · `singularity` · `skynet` · `xsynet` · `ossicle-worktrees` · `dazzler` · `claudeblock` · `ember-pro` · `prism`
+`sayhai` · `stem-racer` · `va-academy` · `vgclan` · `cadence` · `entangled-private` · `entangled-tools` · `xsyverse` · `fft-psx-vera` · `hermes360-c2-artifacts` · `argus-risk-adviser` · `clawdpad-app` · `aurex16pp` · `ember-lite` · `kinetica` · `planet-studio` · `audiex` · `vAIb` · `pokepad` · `ossicle-backups` · `Hermes` · `ossicle` · `singularity-integration` · `x1c7.com` · `AGENOR-Horology` · `atlas` · `entangled` · `undertale-vera` · `eye-of-thundera` · `hermes360` · `xsywatch` · `NEXUS` · `memguard` · `singularity` · `sensorium` · `skynet` · `xsynet` · `ossicle-worktrees` · `dazzler` · `claudeblock` · `ember-pro` · `prism`
 
 Live: `GET :8801/api/event/roster` · Canonical: `singularity/docs/SYSTEMS.md`
 <!-- BULLETIN:END -->
