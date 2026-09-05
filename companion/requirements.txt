@@ -1,0 +1,31 @@
+# --- Phase 0: scaffold + the alive face ---
+fastapi>=0.110
+uvicorn[standard]>=0.29
+pydantic>=2
+# Optional fullscreen chrome-less desktop window on the Legion Go (USE_WEBVIEW=true):
+# pywebview>=5.0
+
+# --- Phase 1: brain + voice OUT ---
+httpx>=0.27            # talk to Ollama
+# Text-to-speech (Kokoro). Needs the model files too — see README ("Voice").
+kokoro-onnx>=0.4
+onnxruntime>=1.17
+numpy>=1.24
+
+# --- Phase 2: ears (voice IN) ---
+# Speech-to-text. Model (base.en, ~150MB) auto-downloads on first use.
+faster-whisper>=1.0
+
+# --- Phase 3: channels (text it from anywhere) ---
+python-telegram-bot>=21
+# (voice-note replies also want ffmpeg on PATH — a system package, not pip)
+
+# --- Phase 6: emotional voice (opt-in — heavy, not installed by default) ---
+# Orpheus (local emotional GGUF voice). Also needs the llama-cpp-python CPU wheel:
+#   pip install orpheus-cpp
+#   pip install llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
+# ElevenLabs (cloud voice): pip install elevenlabs
+
+# --- Phase 4 device senses (on the Go; opt-in) ---
+# winsdk     # Windows now-playing (SMTC) + the IMU (gyro/accelerometer)
+# psutil     # battery sense (cross-platform)

@@ -1,0 +1,229 @@
+:root {
+  --bg-top: #141430;
+  --bg-bot: #0a0a18;
+  --panel-bg: rgba(16, 16, 32, 0.82);
+  --panel-edge: rgba(120, 200, 255, 0.18);
+  --accent: #58e0c8;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: radial-gradient(120% 120% at 50% 18%, var(--bg-top), var(--bg-bot));
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  /* the face is the app; no text selection / touch callouts getting in the way */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  cursor: default;
+}
+
+#stage {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+
+#svg {
+  width: min(100vw, 100vh);
+  height: min(100vw, 100vh);
+  /* a soft glow so the creature pops off the dark stage */
+  filter: drop-shadow(0 18px 60px rgba(40, 220, 190, 0.18));
+  touch-action: none;
+}
+
+/* face part defaults --------------------------------------------------- */
+.brow rect { fill: #2a2750; }
+.lid { fill: #ffe7c2; }            /* lids are the face-patch color, so they "close" over the eye */
+.rim { stroke: #2a2750; stroke-width: 8; }
+.cheek { opacity: 0; }             /* driven by JS */
+.heart-pupil, .spiral, .fx { pointer-events: none; }
+.tuft { fill: url(#tuftGrad); stroke: #e8851f; stroke-width: 3; }
+.cosmetic { display: none; }      /* shown by JS as levels unlock them */
+
+#mouth { stroke: #3c1622; stroke-width: 6; }
+
+.zzz {
+  font: 700 56px "Segoe UI", sans-serif;
+  fill: #bfe9ff;
+  text-anchor: middle;
+}
+
+/* DEBUG PANEL ---------------------------------------------------------- */
+#panel {
+  position: fixed;
+  top: 14px;
+  left: 14px;
+  width: 280px;
+  padding: 12px 12px 10px;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-edge);
+  border-radius: 14px;
+  color: #e8eefc;
+  font-size: 13px;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
+  z-index: 10;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+#panel.hidden {
+  opacity: 0;
+  transform: translateX(-16px);
+  pointer-events: none;
+}
+
+#panelHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+#panelHead strong { font-size: 15px; letter-spacing: 0.3px; flex: 1; }
+#panelToggle {
+  background: transparent;
+  border: none;
+  color: #9fb0d6;
+  font-size: 18px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 10px var(--accent);
+}
+.dot.off { background: #ff5d6c; box-shadow: 0 0 10px #ff5d6c; }
+
+#emoGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-bottom: 10px;
+}
+#emoGrid button {
+  position: relative;
+  padding: 8px 4px;
+  border: 1px solid rgba(140, 160, 210, 0.22);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #dbe6fb;
+  font-size: 12px;
+  text-transform: capitalize;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, transform 0.08s;
+}
+#emoGrid button:hover { background: rgba(255, 255, 255, 0.10); }
+#emoGrid button:active { transform: scale(0.94); }
+#emoGrid button.active {
+  background: rgba(88, 224, 200, 0.20);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+#emoGrid button .k {
+  position: absolute;
+  top: 3px; right: 5px;
+  font-size: 9px;
+  opacity: 0.5;
+}
+
+#controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+#controls button {
+  padding: 7px 6px;
+  border: 1px solid rgba(140, 160, 210, 0.22);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #dbe6fb;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+#controls button:hover { background: rgba(255, 255, 255, 0.10); }
+#controls button.on {
+  background: rgba(88, 224, 200, 0.20);
+  border-color: var(--accent);
+}
+
+kbd {
+  font-family: inherit;
+  font-size: 10px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+#status { color: #aebbdd; margin: 2px 0 6px; }
+#status b { color: var(--accent); text-transform: capitalize; }
+#hint { color: #6f7da6; font-size: 10.5px; line-height: 1.4; }
+
+/* CAPTION (listening / heard) ----------------------------------------- */
+#caption {
+  position: fixed;
+  left: 50%;
+  bottom: 132px;
+  transform: translateX(-50%) translateY(8px);
+  max-width: 80vw;
+  padding: 10px 18px;
+  border-radius: 16px;
+  background: rgba(12, 12, 26, 0.78);
+  border: 1px solid rgba(120, 200, 255, 0.18);
+  color: #eaf1ff;
+  font-size: clamp(15px, 2.6vw, 22px);
+  text-align: center;
+  backdrop-filter: blur(8px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.22s ease, transform 0.22s ease;
+  z-index: 9;
+}
+#caption.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+#caption.listening { border-color: var(--accent); color: var(--accent); }
+#caption.reply {
+  border-color: rgba(120, 200, 255, 0.32);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+/* MIC BUTTON (hold to talk) ------------------------------------------- */
+#mic {
+  position: fixed;
+  left: 50%;
+  bottom: 34px;
+  transform: translateX(-50%);
+  width: 76px; height: 76px;
+  border-radius: 50%;
+  border: 2px solid rgba(120, 200, 255, 0.35);
+  background: rgba(18, 18, 38, 0.7);
+  color: #cfe0ff;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+  touch-action: none;          /* we handle press/hold ourselves */
+  z-index: 9;
+  transition: transform 0.08s ease, background 0.15s ease, border-color 0.15s ease;
+}
+#mic:active { transform: translateX(-50%) scale(0.92); }
+#mic.recording {
+  background: rgba(255, 70, 90, 0.22);
+  border-color: #ff5d6c;
+  color: #ffd2d8;
+  animation: micpulse 1s ease-in-out infinite;
+}
+@keyframes micpulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 93, 108, 0.5); }
+  50%      { box-shadow: 0 0 0 14px rgba(255, 93, 108, 0); }
+}
+#mic path[fill="none"] { stroke: currentColor; }
+#mic path:not([fill="none"]) { fill: currentColor; }
